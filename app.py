@@ -1,50 +1,81 @@
+import os
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
 
 app = Flask(__name__)
 
-# Хранилище данных
+# Расширенное хранилище
 workers = {}
 commands_queue = {}
+global_settings = {"common_text": ""}
 
 @app.route('/')
 def index():
-    # Гарантируем передачу словаря, чтобы HTML не выдал ошибку
-    return render_template('index.html', workers=workers)
+    # Сортировка будет на стороне клиента (в браузере), так удобнее
+    return render_template('index.html', workers=workers, global_text=global_settings["common_text"])
 
 @app.route('/api/update', methods=['POST'])
 def update():
     try:
         data = request.json
         name = data.get("name")
-        if not name:
-            return jsonify({"status": "error"}), 400
+        if not name: return jsonify({"status": "error"}), 400
         
-        workers[name] = {
-            "key": data.get("key", "—"),
-            "total": data.get("total", 0),
+        # Расчет сообщений в минуту (CPM)
+        now = datetime.now()
+        total_sent = data.get("total", 0)
+        
+        if name in workers:
+            start_time = workers[name].get('start_session', now)
+            diff = (now - start_time).total_seconds() / 60
+            cpm = round(total_sent / diff, 1) if diff > 0.1 else 0
+        else:
+            workers[name] = {'start_session': now}
+            cpm = 0
+
+        workers[name].update({
+            "total": total_sent,
             "status": "РАБОТАЕТ" if data.get("status") else "ПАУЗА",
-            "mode": data.get("mode", "Type"),
-            "speed": data.get("speed", 1.0),
-            "last_seen": datetime.now().strftime("%H:%M:%S")
-        }
+            "cpm": cpm,
+            "last_seen": now.strftime("%H:%M:%S")
+        })
         
-        commands = commands_queue.get(name, {})
-        if commands:
-            commands_queue[name] = {} # Очищаем после отправки
+        cmds = commands_queue.get(name, {})
+        # Добавляем глобальный текст в команды, если он есть
+        if global_settings["common_text"]:
+            cmds["new_text"] = global_settings["common_text"]
             
-        return jsonify({"status": "ok", "commands": commands})
+        if cmds: commands_queue[name] = {}
+            
+        return jsonify({"status": "ok", "commands": cmds})
     except:
         return jsonify({"status": "error"}), 500
 
-@app.route('/api/send_command/<name>/<cmd>/<value>')
-def send_command(name, cmd, value):
-    if name not in commands_queue:
-        commands_queue[name] = {}
+@app.route('/api/admin_action', methods=['POST'])
+def admin_action():
+    data = request.json
+    action = data.get("action")
+    target = data.get("target") # "all" или имя воркера
     
-    val = True if value.lower() == "true" else False if value.lower() == "false" else value
-    commands_queue[name][cmd] = val
-    return jsonify({"status": "command_sent"})
+    if action == "set_text":
+        text = data.get("text")
+        if target == "all":
+            global_settings["common_text"] = text
+        else:
+            if target not in commands_queue: commands_queue[target] = {}
+            commands_queue[target]["new_text"] = text
+            
+    elif action == "reset":
+        if target == "all":
+            for w in workers: 
+                if w not in commands_queue: commands_queue[w] = {}
+                commands_queue[w]["reset_stats"] = True
+        else:
+            if target not in commands_queue: commands_queue[target] = {}
+            commands_queue[target]["reset_stats"] = True
+            
+    return jsonify({"status": "success"})
 
-if __name__ == '__main__':
-    app.run()
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
