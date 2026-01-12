@@ -4,35 +4,94 @@
     <meta charset="UTF-8">
     <title>Ghost Admin Pro</title>
     <style>
-        body { background: #0a0a0a; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; padding: 20px; margin: 0; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .panel { background: #1a1a1a; padding: 25px; border-radius: 12px; margin-bottom: 25px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        h1 { color: #00ff00; text-transform: uppercase; letter-spacing: 2px; margin-top: 0; }
-        table { width: 100%; border-collapse: collapse; background: #111; border-radius: 8px; overflow: hidden; }
-        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #222; }
-        th { background: #000; color: #00ff00; cursor: pointer; user-select: none; }
-        th:hover { background: #050505; }
-        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 13px; }
-        .btn-green { background: #28a745; color: white; }
-        .btn-red { background: #dc3545; color: white; }
+        body { background: #0a0a0a; color: #e0e0e0; font-family: sans-serif; padding: 20px; }
+        .panel { background: #1a1a1a; padding: 20px; border-radius: 10px; border: 1px solid #333; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border-bottom: 1px solid #333; text-align: left; }
+        th { color: #00ff00; }
+        .btn { padding: 5px 10px; cursor: pointer; border: none; border-radius: 3px; font-weight: bold; }
         .btn-blue { background: #007bff; color: white; }
-        .btn:hover { transform: translateY(-1px); filter: brightness(1.2); }
-        .top-gun { color: gold !important; font-weight: bold; text-shadow: 0 0 10px rgba(255,215,0,0.5); }
-        input[type="text"] { background: #000; border: 1px solid #444; color: #00ff00; padding: 10px; width: 300px; border-radius: 5px; outline: none; }
-        
-        /* Модальное окно */
-        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(5px); }
-        .modal-content { background: #1a1a1a; margin: 5% auto; padding: 30px; width: 70%; border-radius: 15px; border: 1px solid #00ff00; }
-        textarea { width: 100%; height: 400px; background: #000; color: #00ff00; border: 1px solid #333; padding: 15px; font-family: 'Consolas', monospace; font-size: 14px; border-radius: 8px; box-sizing: border-box; }
-        .modal-actions { margin-top: 20px; display: flex; gap: 10px; }
+        .btn-red { background: #dc3545; color: white; }
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); }
+        .modal-content { background: #1a1a1a; margin: 10% auto; padding: 20px; width: 60%; border: 1px solid #00ff00; }
+        textarea { width: 100%; height: 300px; background: #000; color: #00ff00; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>GhostType Control Panel</h1>
+    <h1>Ghost Admin Panel</h1>
+    
+    <div class="panel">
+        <input type="text" id="globalText" placeholder="Текст для всех...">
+        <button class="btn btn-blue" onclick="adminAction('set_text', 'all', document.getElementById('globalText').value)">ОТПРАВИТЬ ВСЕМ</button>
+    </div>
 
-        <div class="panel">
-            <h3 style="margin-top:0">Глобальное управление</h3>
-            <input type="text" id="globalText" placeholder="Новый текст для всех сотрудников...">
-            <button class="btn btn-blue" onclick="adminAction('set_text', 'all', document.getElementById('globalText').value)">ОТПРАВИТЬ ВСЕМ</button>
-            <button class="btn btn-red" onclick="adminAction('reset
+    <div class="panel">
+        <table>
+            <thead>
+                <tr>
+                    <th>ИМЯ</th>
+                    <th>MSG</th>
+                    <th>CPM</th>
+                    <th>СТАТУС</th>
+                    <th>УПРАВЛЕНИЕ</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, info in workers.items() %}
+                <tr>
+                    <td>{{ name }}</td>
+                    <td>{{ info.total }}</td>
+                    <td>{{ info.cpm }}</td>
+                    <td>{{ info.status }}</td>
+                    <td>
+                        <button class="btn btn-blue" onclick="openEditor('{{ name }}')">ТЕКСТ</button>
+                        <button class="btn btn-red" onclick="adminAction('reset', '{{ name }}')">0</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if not workers %}
+        <p style="text-align: center; color: #666;">Ожидание подключения сотрудников... (Обновите страницу)</p>
+        {% endif %}
+    </div>
+
+    <div id="editorModal" class="modal">
+        <div class="modal-content">
+            <h3 id="editTitle">Редактор</h3>
+            <textarea id="editArea"></textarea><br><br>
+            <button class="btn btn-blue" onclick="savePhrases()">СОХРАНИТЬ</button>
+            <button class="btn btn-red" onclick="closeEditor()">ЗАКРЫТЬ</button>
+        </div>
+    </div>
+
+    <script>
+        // Передаем данные из Python максимально просто
+        const data = {{ workers|tojson|safe }};
+
+        function openEditor(name) {
+            document.getElementById('editTitle').innerText = name;
+            document.getElementById('editArea').value = data[name].phrases || "";
+            document.getElementById('editorModal').style.display = "block";
+            window.currentWorker = name;
+        }
+
+        function closeEditor() { document.getElementById('editorModal').style.display = "none"; }
+
+        async function savePhrases() {
+            const text = document.getElementById('editArea').value;
+            await adminAction('set_text', window.currentWorker, text);
+            closeEditor();
+        }
+
+        async function adminAction(action, target, text = "") {
+            await fetch('/api/admin_action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action, target, text})
+            });
+            location.reload();
+        }
+    </script>
+</body>
+</html>
