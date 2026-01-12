@@ -1,17 +1,46 @@
 import os
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 from datetime import datetime
+from functools import wraps
 
 app = Flask(__name__)
+
+# --- НАСТРОЙКИ БЕЗОПАСНОСТИ ---
+USER_LOGIN = "Admin"
+USER_PASSWORD = "GhostType9991" # <-- ИЗМЕНИТЕ ЭТОТ ПАРОЛЬ
 
 # Хранилище данных
 workers = {}
 commands_queue = {}
 global_settings = {"common_text": ""}
 
+# --- ФУНКЦИИ АВТОРИЗАЦИИ ---
+def check_auth(username, password):
+    return username == USER_LOGIN and password == USER_PASSWORD
+
+def authenticate():
+    return Response(
+    'Доступ ограничен. Введите логин и пароль.', 401,
+    {'WWW-Authenticate': 'Basic realm="Login Required"'})
+
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
+        return f(*args, **kwargs)
+    return decorated
+
 @app.route('/')
+@requires_auth
 def index():
-    return render_template('index.html', workers=workers)
+    return render_template('index.html')
+
+@app.route('/api/get_workers')
+@requires_auth
+def get_workers_api():
+    return jsonify(workers)
 
 @app.route('/api/update', methods=['POST'])
 def update():
@@ -24,14 +53,11 @@ def update():
         now = datetime.now()
         total_sent = data.get("total", 0)
         
-        # Расчет CPM
         if name in workers:
             start_time = workers[name].get('start_session', now)
             if isinstance(start_time, str):
-                try:
-                    start_time = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
-                except:
-                    start_time = now
+                try: start_time = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
+                except: start_time = now
             diff_minutes = (now - start_time).total_seconds() / 60
             cpm = round(total_sent / diff_minutes, 1) if diff_minutes > 0.1 else 0
         else:
@@ -57,10 +83,10 @@ def update():
             
         return jsonify({"status": "ok", "commands": cmds})
     except Exception as e:
-        print(f"Update error: {e}")
         return jsonify({"status": "error"}), 500
 
 @app.route('/api/admin_action', methods=['POST'])
+@requires_auth
 def admin_action():
     try:
         data = request.json
@@ -89,15 +115,9 @@ def admin_action():
                 commands_queue[target]["reset_stats"] = True
                 if target in workers:
                     workers[target]['start_session'] = datetime.now()
-                    
-        elif action == "force_status":
-            value = data.get("value")
-            if target not in commands_queue: commands_queue[target] = {}
-            commands_queue[target]["force_ready"] = value
 
         return jsonify({"status": "success"})
     except Exception as e:
-        print(f"Action error: {e}")
         return jsonify({"status": "error"}), 500
 
 if __name__ == "__main__":
