@@ -1,131 +1,114 @@
-import os
-import io
-import csv
-from flask import Flask, render_template, request, jsonify, Response, make_response
-from datetime import datetime
-from functools import wraps
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Ghost Admin Pro</title>
+    <style>
+        body { background: #0a0a0a; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .panel { background: #1a1a1a; padding: 20px; border-radius: 10px; border: 1px solid #333; margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
+        table { width: 100%; border-collapse: collapse; background: #111; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #222; }
+        th { background: #000; color: #00ff00; }
+        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s; text-decoration: none; display: inline-block; }
+        .btn-blue { background: #007bff; color: white; }
+        .btn-green { background: #28a745; color: white; }
+        .btn-red { background: #dc3545; color: white; }
+        .btn-orange { background: #fd7e14; color: white; }
+        .btn-purple { background: #6f42c1; color: white; }
+        .btn:hover { filter: brightness(1.2); }
+        .top-gun { color: gold !important; font-weight: bold; text-shadow: 0 0 10px gold; }
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); }
+        .modal-content { background: #1a1a1a; margin: 10% auto; padding: 25px; width: 400px; border-radius: 10px; border: 1px solid #00ff00; text-align: center; }
+        .input-group { text-align: left; margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; color: #888; }
+        .input-group input, .input-group select { width: 100%; padding: 8px; background: #000; border: 1px solid #444; color: #00ff00; border-radius: 5px; box-sizing: border-box; }
+        textarea { width: 100%; height: 200px; background: #000; color: #00ff00; padding: 10px; border-radius: 5px; border: 1px solid #333; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>GhostType Control Panel <span id="onlineCounter" style="font-size: 14px; color: #666;"></span></h1>
+        <div class="panel">
+            <input type="text" id="globalText" style="background:#000; color:#00ff00; border:1px solid #444; padding:8px; border-radius:5px; flex-grow:1" placeholder="Текст для всех...">
+            <button class="btn btn-blue" onclick="adminAction('set_text', 'all', {text: document.getElementById('globalText').value})">ОТПРАВИТЬ ВСЕМ</button>
+            <a href="/api/download_report" class="btn btn-green">📊 СКАЧАТЬ ОТЧЕТ</a>
+            <button class="btn btn-red" onclick="adminAction('reset', 'all')">СБРОС ВСЕХ</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>СОТРУДНИК</th>
+                    <th>СООБЩЕНИЙ</th>
+                    <th>CPM</th>
+                    <th>СТАТУС</th>
+                    <th>УПРАВЛЕНИЕ</th>
+                </tr>
+            </thead>
+            <tbody id="workerTable"></tbody>
+        </table>
+    </div>
 
-app = Flask(__name__)
-
-USER_LOGIN = "Admin"
-USER_PASSWORD = "GhostType9991"
-
-workers = {}
-commands_queue = {}
-global_settings = {"common_text": ""}
-
-def check_auth(username, password):
-    return username == USER_LOGIN and password == USER_PASSWORD
-
-def authenticate():
-    return Response('Доступ ограничен.', 401, {'WWW-Authenticate': 'Basic realm="Login Required"'})
-
-def requires_auth(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth = request.authorization
-        if not auth or not check_auth(auth.username, auth.password):
-            return authenticate()
-        return f(*args, **kwargs)
-    return decorated
-
-@app.route('/')
-@requires_auth
-def index():
-    return render_template('index.html')
-
-@app.route('/api/get_workers')
-@requires_auth
-def get_workers_api():
-    return jsonify(workers)
-
-@app.route('/api/download_report')
-@requires_auth
-def download_report():
-    # Создаем поток для CSV
-    si = io.StringIO()
-    # Добавляем BOM для корректного отображения кириллицы в Excel
-    si.write('\ufeff')
-    cw = csv.writer(si, delimiter=';')
+    <div id="editorModal" class="modal"><div class="modal-content" style="width: 60%;"><h3>Редактор фразы</h3><textarea id="editArea"></textarea><br><br><button class="btn btn-green" onclick="savePhrases()">ОК</button> <button class="btn btn-red" onclick="closeModals()">ЗАКРЫТЬ</button></div></div>
     
-    # Заголовки
-    cw.writerow(['Имя сотрудника', 'Количество сообщений'])
-    
-    # Сортируем сотрудников по алфавиту
-    sorted_names = sorted(workers.keys())
-    
-    for name in sorted_names:
-        cw.writerow([name, workers[name].get('total', 0)])
-    
-    output = make_response(si.getvalue())
-    output.headers["Content-Disposition"] = f"attachment; filename=report_{datetime.now().strftime('%Y-%m-%d')}.csv"
-    output.headers["Content-type"] = "text/csv; charset=utf-8"
-    return output
+    <div id="configModal" class="modal"><div class="modal-content"><h3>Конфиг сотрудника</h3>
+        <div class="input-group"><label>Stage:</label><select id="confMode"><option value="Type">Type</option><option value="Paste">Paste</option></select></div>
+        <div class="input-group"><label>Скорость:</label><input type="number" step="0.1" id="confSpeed"></div>
+        <div class="input-group"><label>Сообщений:</label><input type="number" id="confTotal"></div>
+        <button class="btn btn-green" onclick="saveConfigRemote()">СОХРАНИТЬ</button> <button class="btn btn-red" onclick="closeModals()">ОТМЕНА</button>
+    </div></div>
 
-@app.route('/api/update', methods=['POST'])
-def update():
-    try:
-        data = request.json
-        name = data.get("name")
-        if not name: return jsonify({"status": "error"}), 400
+    <script>
+        let currentWorker = "";
+        async function refreshData() {
+            if (document.querySelector('.modal[style*="display: block"]')) return;
+            const res = await fetch('/api/get_workers');
+            const workers = await res.json();
+            let html = "";
+            
+            // Сортируем список сотрудников по алфавиту перед отображением
+            const sortedEntries = Object.entries(workers).sort((a, b) => a[0].localeCompare(b[0]));
+            
+            sortedEntries.forEach(([name, w]) => {
+                html += `<tr>
+                    <td class="${w.cpm > 10 ? 'top-gun' : ''}">${name}<br><small style="color:#555">${w.mode}</small></td>
+                    <td>${w.total}</td><td>${w.cpm}</td>
+                    <td style="color:${w.status === 'РАБОТАЕТ' ? '#00ff00' : '#ff4444'}">${w.status}</td>
+                    <td>
+                        <button class="btn btn-blue" onclick="openEditor('${name}', \`${w.phrases}\`)">ТЕКСТ</button>
+                        <button class="btn btn-purple" onclick="openConfig('${name}', '${w.mode}', ${w.speed}, ${w.total})">КОНФИГ</button>
+                        <button class="btn btn-orange" onclick="adminAction('toggle_status', '${name}')">СТАТУС</button>
+                        <button class="btn btn-red" onclick="adminAction('reset', '${name}')">СБРОС</button>
+                    </td>
+                </tr>`;
+            });
+            document.getElementById("workerTable").innerHTML = html;
+        }
+
+        function openEditor(n, p) { currentWorker = n; document.getElementById('editArea').value = p; document.getElementById('editorModal').style.display = 'block'; }
+        function openConfig(n, m, s, t) { currentWorker = n; document.getElementById('confMode').value = m; document.getElementById('confSpeed').value = s; document.getElementById('confTotal').value = t; document.getElementById('configModal').style.display = 'block'; }
+        function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
         
-        now = datetime.now()
-        total_sent = data.get("total", 0)
-        
-        if name not in workers:
-            workers[name] = {'start_session': now}
-        
-        workers[name].update({
-            "total": total_sent,
-            "status": "РАБОТАЕТ" if data.get("status") else "ПАУЗА",
-            "cpm": round(total_sent / ((now - workers[name]['start_session']).total_seconds() / 60), 1) if (now - workers[name]['start_session']).total_seconds() > 10 else 0,
-            "mode": data.get("mode", "Type"),
-            "speed": data.get("speed", 1.0),
-            "phrases": data.get("phrases_content", ""),
-            "last_seen": now.strftime("%H:%M:%S")
-        })
-        
-        cmds = commands_queue.get(name, {})
-        if global_settings["common_text"]: cmds["new_text"] = global_settings["common_text"]
-        commands_queue[name] = {}
-        return jsonify({"status": "ok", "commands": cmds})
-    except: return jsonify({"status": "error"}), 500
+        async function savePhrases() { await adminAction('set_text', currentWorker, {text: document.getElementById('editArea').value}); closeModals(); }
+        async function saveConfigRemote() { 
+            await adminAction('update_config', currentWorker, {
+                mode: document.getElementById('confMode').value,
+                speed: document.getElementById('confSpeed').value,
+                total: document.getElementById('confTotal').value
+            }); 
+            closeModals(); 
+        }
 
-@app.route('/api/admin_action', methods=['POST'])
-@requires_auth
-def admin_action():
-    try:
-        data = request.json
-        action, target = data.get("action"), data.get("target")
-        if target != "all" and target not in commands_queue: commands_queue[target] = {}
+        async function adminAction(action, target, data = {}) {
+            await fetch('/api/admin_action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action, target, ...data})
+            });
+            refreshData();
+        }
 
-        if action == "set_text":
-            if target == "all":
-                global_settings["common_text"] = data.get("text")
-                for w in workers: 
-                    if w not in commands_queue: commands_queue[w] = {}
-                    commands_queue[w]["new_text"] = data.get("text")
-            else: commands_queue[target]["new_text"] = data.get("text")
-                
-        elif action == "reset":
-            targets = workers.keys() if target == "all" else [target]
-            for t in targets:
-                if t not in commands_queue: commands_queue[t] = {}
-                commands_queue[t]["reset_stats"] = True
-                if t in workers: workers[t]['start_session'] = datetime.now()
-
-        elif action == "toggle_status":
-            if target in workers:
-                commands_queue[target]["set_status"] = not (workers[target]["status"] == "РАБОТАЕТ")
-
-        elif action == "update_config":
-            commands_queue[target].update({
-                "new_speed": data.get("speed"),
-                "new_total": data.get("total"),
-                "new_mode": data.get("mode")
-            })
-        return jsonify({"status": "success"})
-    except: return jsonify({"status": "error"}), 500
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+        setInterval(refreshData, 3000); refreshData();
+    </script>
+</body>
+</html>
