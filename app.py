@@ -1,5 +1,7 @@
 import os
-from flask import Flask, render_template, request, jsonify, Response
+import io
+import csv
+from flask import Flask, render_template, request, jsonify, Response, make_response
 from datetime import datetime
 from functools import wraps
 
@@ -9,7 +11,6 @@ app = Flask(__name__)
 USER_LOGIN = "Admin"
 USER_PASSWORD = "GhostType9991"
 
-# Хранилище
 workers = {}
 commands_queue = {}
 global_settings = {"common_text": ""}
@@ -39,6 +40,25 @@ def index():
 def get_workers_api():
     return jsonify(workers)
 
+# --- НОВЫЙ МАРШРУТ ДЛЯ СКАЧИВАНИЯ ОТЧЕТА ---
+@app.route('/api/download_report')
+@requires_auth
+def download_report():
+    si = io.StringIO()
+    si.write('\ufeff')  # BOM для Excel (чтобы русский язык читался)
+    cw = csv.writer(si, delimiter=';')
+    cw.writerow(['Имя сотрудника', 'Количество сообщений'])
+    
+    # Сортировка по алфавиту
+    sorted_names = sorted(workers.keys())
+    for name in sorted_names:
+        cw.writerow([name, workers[name].get('total', 0)])
+    
+    output = make_response(si.getvalue())
+    output.headers["Content-Disposition"] = f"attachment; filename=report_{datetime.now().strftime('%d_%m_%Y')}.csv"
+    output.headers["Content-type"] = "text/csv; charset=utf-8"
+    return output
+
 @app.route('/api/update', methods=['POST'])
 def update():
     try:
@@ -64,10 +84,7 @@ def update():
         
         cmds = commands_queue.get(name, {})
         if global_settings["common_text"]: cmds["new_text"] = global_settings["common_text"]
-        
-        # Очищаем очередь после отправки команд софту
         commands_queue[name] = {}
-        
         return jsonify({"status": "ok", "commands": cmds})
     except: return jsonify({"status": "error"}), 500
 
@@ -76,36 +93,27 @@ def update():
 def admin_action():
     try:
         data = request.json
-        action = data.get("action")
-        target = data.get("target")
-        
-        if target != "all" and target not in commands_queue:
-            commands_queue[target] = {}
+        action, target = data.get("action"), data.get("target")
+        if target != "all" and target not in commands_queue: commands_queue[target] = {}
 
         if action == "set_text":
-            text = data.get("text")
             if target == "all":
-                global_settings["common_text"] = text
-                for w in workers:
+                global_settings["common_text"] = data.get("text")
+                for w in workers: 
                     if w not in commands_queue: commands_queue[w] = {}
-                    commands_queue[w]["new_text"] = text
-            else:
-                commands_queue[target]["new_text"] = text
+                    commands_queue[w]["new_text"] = data.get("text")
+            else: commands_queue[target]["new_text"] = data.get("text")
                 
         elif action == "reset":
-            if target == "all":
-                for w in workers:
-                    if w not in commands_queue: commands_queue[w] = {}
-                    commands_queue[w]["reset_stats"] = True
-                    workers[w]['start_session'] = datetime.now()
-            else:
-                commands_queue[target]["reset_stats"] = True
-                if target in workers: workers[target]['start_session'] = datetime.now()
+            targets = workers.keys() if target == "all" else [target]
+            for t in targets:
+                if t not in commands_queue: commands_queue[t] = {}
+                commands_queue[t]["reset_stats"] = True
+                if t in workers: workers[t]['start_session'] = datetime.now()
 
         elif action == "toggle_status":
             if target in workers:
-                current_is_ready = workers[target].get("status") == "РАБОТАЕТ"
-                commands_queue[target]["set_status"] = not current_is_ready
+                commands_queue[target]["set_status"] = not (workers[target]["status"] == "РАБОТАЕТ")
 
         elif action == "update_config":
             commands_queue[target].update({
@@ -113,10 +121,8 @@ def admin_action():
                 "new_total": data.get("total"),
                 "new_mode": data.get("mode")
             })
-
         return jsonify({"status": "success"})
     except: return jsonify({"status": "error"}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
