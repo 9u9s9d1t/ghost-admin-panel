@@ -9,6 +9,7 @@ app = Flask(__name__)
 USER_LOGIN = "Admin"
 USER_PASSWORD = "GhostType9991"
 
+# Хранилище
 workers = {}
 commands_queue = {}
 global_settings = {"common_text": ""}
@@ -17,9 +18,7 @@ def check_auth(username, password):
     return username == USER_LOGIN and password == USER_PASSWORD
 
 def authenticate():
-    return Response(
-    'Доступ ограничен. Введите логин и пароль.', 401,
-    {'WWW-Authenticate': 'Basic realm="Login Required"'})
+    return Response('Доступ ограничен.', 401, {'WWW-Authenticate': 'Basic realm="Login Required"'})
 
 def requires_auth(f):
     @wraps(f)
@@ -45,43 +44,32 @@ def update():
     try:
         data = request.json
         name = data.get("name")
-        if not name:
-            return jsonify({"status": "error"}), 400
+        if not name: return jsonify({"status": "error"}), 400
         
         now = datetime.now()
         total_sent = data.get("total", 0)
         
-        if name in workers:
-            start_time = workers[name].get('start_session', now)
-            if isinstance(start_time, str):
-                try: start_time = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
-                except: start_time = now
-            diff_minutes = (now - start_time).total_seconds() / 60
-            cpm = round(total_sent / diff_minutes, 1) if diff_minutes > 0.1 else 0
-        else:
+        if name not in workers:
             workers[name] = {'start_session': now}
-            cpm = 0
-
+        
         workers[name].update({
             "total": total_sent,
             "status": "РАБОТАЕТ" if data.get("status") else "ПАУЗА",
-            "cpm": cpm,
+            "cpm": round(total_sent / ((now - workers[name]['start_session']).total_seconds() / 60), 1) if (now - workers[name]['start_session']).total_seconds() > 10 else 0,
             "mode": data.get("mode", "Type"),
+            "speed": data.get("speed", 1.0),
             "phrases": data.get("phrases_content", ""),
-            "last_seen": now.strftime("%H:%M:%S"),
-            "start_session": workers[name]['start_session']
+            "last_seen": now.strftime("%H:%M:%S")
         })
         
         cmds = commands_queue.get(name, {})
-        if global_settings["common_text"]:
-            cmds["new_text"] = global_settings["common_text"]
-            
-        if name in commands_queue:
-            commands_queue[name] = {}
-            
+        if global_settings["common_text"]: cmds["new_text"] = global_settings["common_text"]
+        
+        # Очищаем очередь после отправки команд софту
+        commands_queue[name] = {}
+        
         return jsonify({"status": "ok", "commands": cmds})
-    except Exception as e:
-        return jsonify({"status": "error"}), 500
+    except: return jsonify({"status": "error"}), 500
 
 @app.route('/api/admin_action', methods=['POST'])
 @requires_auth
@@ -91,6 +79,9 @@ def admin_action():
         action = data.get("action")
         target = data.get("target")
         
+        if target != "all" and target not in commands_queue:
+            commands_queue[target] = {}
+
         if action == "set_text":
             text = data.get("text")
             if target == "all":
@@ -99,7 +90,6 @@ def admin_action():
                     if w not in commands_queue: commands_queue[w] = {}
                     commands_queue[w]["new_text"] = text
             else:
-                if target not in commands_queue: commands_queue[target] = {}
                 commands_queue[target]["new_text"] = text
                 
         elif action == "reset":
@@ -109,21 +99,23 @@ def admin_action():
                     commands_queue[w]["reset_stats"] = True
                     workers[w]['start_session'] = datetime.now()
             else:
-                if target not in commands_queue: commands_queue[target] = {}
                 commands_queue[target]["reset_stats"] = True
-                if target in workers:
-                    workers[target]['start_session'] = datetime.now()
+                if target in workers: workers[target]['start_session'] = datetime.now()
 
-        # НОВОЕ: Переключение статуса
         elif action == "toggle_status":
             if target in workers:
-                is_ready = workers[target].get("status") == "РАБОТАЕТ"
-                if target not in commands_queue: commands_queue[target] = {}
-                commands_queue[target]["set_status"] = not is_ready
+                current_is_ready = workers[target].get("status") == "РАБОТАЕТ"
+                commands_queue[target]["set_status"] = not current_is_ready
+
+        elif action == "update_config":
+            commands_queue[target].update({
+                "new_speed": data.get("speed"),
+                "new_total": data.get("total"),
+                "new_mode": data.get("mode")
+            })
 
         return jsonify({"status": "success"})
-    except Exception as e:
-        return jsonify({"status": "error"}), 500
+    except: return jsonify({"status": "error"}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
