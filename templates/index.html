@@ -1,23 +1,50 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>GhostType Admin Panel</title>
+    <title>Ghost Admin</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #e0e0e0; padding: 30px; margin: 0; }
-        h1 { color: #bb86fc; border-bottom: 2px solid #333; padding-bottom: 15px; margin-bottom: 30px; }
-        
-        .container { max-width: 1200px; margin: 0 auto; }
-        
-        table { width: 100%; border-collapse: collapse; background: #1e1e1e; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border-radius: 8px; overflow: hidden; }
-        th, td { padding: 18px; text-align: center; border-bottom: 1px solid #333; }
-        th { background: #2c2c2c; color: #bb86fc; text-transform: uppercase; font-size: 13px; letter-spacing: 1px; }
-        
-        .status-run { color: #03dac6; font-weight: bold; background: rgba(3, 218, 198, 0.1); padding: 5px 10px; border-radius: 4px; }
-        .status-pause { color: #cf6679; font-weight: bold; background: rgba(207, 102, 121, 0.1); padding: 5px 10px; border-radius: 4px; }
-        
-        .btn { padding: 10px 16px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; text-transform: uppercase; font-size: 11px; transition: 0.2s; margin: 0 3px; }
-        .btn-start { background: #03dac6; color: #000; }
-        .btn-stop { background: #cf6679; color: #fff; }
-        .btn-reset { background: #3700b3; color: #fff; }
-        .btn:hover { opacity: 0.8; transform
+        body { background: #000; color: #fff; font-family: sans-serif; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #333; padding: 10px; text-align: left; }
+        th { background: #111; color: #00ff00; }
+        .btn { padding: 5px 10px; cursor: pointer; border: none; margin-right: 5px; }
+        .btn-start { background: #00ff00; }
+        .btn-stop { background: #ff0000; color: white; }
+    </style>
+</head>
+<body>
+    <h1>GhostType Control Panel</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Имя</th>
+                <th>Сообщения</th>
+                <th>Статус</th>
+                <th>Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for name, info in workers.items() %}
+            <tr>
+                <td>{{ name }}</td>
+                <td>{{ info.total }}</td>
+                <td>{{ info.status }}</td>
+                <td>
+                    <button class="btn btn-start" onclick="send('{{ name }}', 'force_ready', 'true')">ПУСК</button>
+                    <button class="btn btn-stop" onclick="send('{{ name }}', 'force_ready', 'false')">СТОП</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <script>
+        async function send(name, cmd, val) {
+            await fetch(`/api/send_command/${name}/${cmd}/${val}`);
+            location.reload();
+        }
+        setInterval(() => location.reload(), 10000);
+    </script>
+</body>
+</html>
