@@ -1,38 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>GhostType Admin</title>
-    <meta http-equiv="refresh" content="10"> <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: white; padding: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #333; padding: 12px; text-align: left; }
-        th { background: #333; }
-        tr:hover { background: #252525; }
-        .status-run { color: #00ff00; }
-        .status-pause { color: #ff4444; }
+    <title>GhostType Admin Panel</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #e0e0e0; padding: 30px; }
+        h1 { color: #bb86fc; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; background: #1e1e1e; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        th, td { border: 1px solid #333; padding: 15px; text-align: center; }
+        th { background: #2c2c2c; color: #bb86fc; text-transform: uppercase; font-size: 12px; }
+        .btn { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 2px; transition: 0.3s; }
+        .btn-stop { background: #cf6679; color: white; }
+        .btn-start { background: #03dac6; color: black; }
+        .btn-reset { background: #3700b3; color: white; }
+        .btn:hover { opacity: 0.8; transform: translateY(-1px); }
+        .status-run { color: #03dac6; font-weight: bold; }
+        .status-pause { color: #cf6679; font-weight: bold; }
     </style>
+    <script>
+        async def sendCommand(name, cmd, value) {
+            await fetch(`/api/send_command/${name}/${cmd}/${value}`);
+            alert('Команда отправлена! Ожидайте синхронизации софта.');
+        }
+        // Автообновление таблицы каждые 5 сек
+        setInterval(() => location.reload(), 5000);
+    </script>
 </head>
 <body>
-    <h1>Панель управления GhostType 9991</h1>
+    <h1>Управление сотрудниками GhostType</h1>
     <table>
         <tr>
             <th>Имя (Stage)</th>
-            <th>Всего</th>
+            <th>Сообщения</th>
             <th>Статус</th>
-            <th>Режим</th>
             <th>Скорость</th>
-            <th>Ключ</th>
-            <th>Был в сети</th>
+            <th>Управление</th>
         </tr>
         {% for name, info in workers.items() %}
         <tr>
             <td>{{ name }}</td>
-            <td><b>{{ info.total }}</b></td>
+            <td><span style="font-size: 1.2em;">{{ info.total }}</span></td>
             <td class="{{ 'status-run' if info.status == 'РАБОТАЕТ' else 'status-pause' }}">{{ info.status }}</td>
-            <td>{{ info.mode }}</td>
             <td>{{ info.speed }}s</td>
-            <td><code>{{ info.key }}</code></td>
-            <td>{{ info.last_seen }}</td>
+            <td>
+                <button class="btn btn-start" onclick="sendCommand('{{name}}', 'force_ready', 'true')">ПУСК</button>
+                <button class="btn btn-stop" onclick="sendCommand('{{name}}', 'force_ready', 'false')">СТОП</button>
+                <button class="btn btn-reset" onclick="sendCommand('{{name}}', 'reset_stats', 'true')">СБРОС</button>
+            </td>
         </tr>
         {% endfor %}
     </table>
