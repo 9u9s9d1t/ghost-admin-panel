@@ -4,45 +4,60 @@
     <meta charset="UTF-8">
     <title>Ghost Admin Pro</title>
     <style>
-        body { background: #0a0a0a; color: #e0e0e0; font-family: sans-serif; padding: 20px; }
-        .panel { background: #1a1a1a; padding: 20px; border-radius: 10px; border: 1px solid #333; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px; border-bottom: 1px solid #333; text-align: left; }
-        th { color: #00ff00; }
-        .btn { padding: 5px 10px; cursor: pointer; border: none; border-radius: 3px; font-weight: bold; }
+        body { background: #0a0a0a; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .panel { background: #1a1a1a; padding: 20px; border-radius: 10px; border: 1px solid #333; margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
+        
+        table { width: 100%; border-collapse: collapse; background: #111; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #222; }
+        th { background: #000; color: #00ff00; }
+        
+        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         .btn-blue { background: #007bff; color: white; }
+        .btn-green { background: #28a745; color: white; }
         .btn-red { background: #dc3545; color: white; }
-        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); }
-        .modal-content { background: #1a1a1a; margin: 10% auto; padding: 20px; width: 60%; border: 1px solid #00ff00; }
-        textarea { width: 100%; height: 300px; background: #000; color: #00ff00; }
+        .btn-orange { background: #fd7e14; color: white; }
+        .btn:hover { filter: brightness(1.2); }
+
+        .top-gun { color: gold !important; font-weight: bold; text-shadow: 0 0 10px gold; }
+
+        /* Окно фильтра */
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); }
+        .modal-content { background: #1a1a1a; margin: 15% auto; padding: 25px; width: 300px; border-radius: 10px; border: 1px solid #00ff00; text-align: center; }
+        .filter-option { display: block; width: 100%; padding: 10px; margin: 5px 0; background: #222; color: white; border: 1px solid #333; cursor: pointer; border-radius: 5px; }
+        .filter-option:hover { background: #00ff00; color: black; }
+
+        textarea { width: 100%; height: 200px; background: #000; color: #00ff00; padding: 10px; border-radius: 5px; }
     </style>
 </head>
 <body>
-    <h1>Ghost Admin Panel</h1>
-    
-    <div class="panel">
-        <input type="text" id="globalText" placeholder="Текст для всех...">
-        <button class="btn btn-blue" onclick="adminAction('set_text', 'all', document.getElementById('globalText').value)">ОТПРАВИТЬ ВСЕМ</button>
-    </div>
+    <div class="container">
+        <h1>GhostType Control Panel</h1>
+        
+        <div class="panel">
+            <input type="text" id="globalText" style="background:#000; color:#00ff00; border:1px solid #444; padding:8px; border-radius:5px; flex-grow:1" placeholder="Текст для всех...">
+            <button class="btn btn-blue" onclick="adminAction('set_text', 'all', document.getElementById('globalText').value)">ОТПРАВИТЬ ВСЕМ</button>
+            <button class="btn btn-orange" onclick="toggleModal('filterModal')">🔍 ФИЛЬТР</button>
+            <button class="btn btn-red" onclick="adminAction('reset', 'all')">СБРОС ВСЕХ</button>
+        </div>
 
-    <div class="panel">
         <table>
             <thead>
                 <tr>
-                    <th>ИМЯ</th>
-                    <th>MSG</th>
-                    <th>CPM</th>
+                    <th>СОТРУДНИК</th>
+                    <th>СООБЩЕНИЙ</th>
+                    <th>В МИНУТУ (CPM)</th>
                     <th>СТАТУС</th>
                     <th>УПРАВЛЕНИЕ</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="workerTable">
                 {% for name, info in workers.items() %}
-                <tr>
-                    <td>{{ name }}</td>
+                <tr data-name="{{ name }}" data-total="{{ info.total }}" data-cpm="{{ info.cpm }}">
+                    <td class="{{ 'top-gun' if info.cpm > 10 else '' }}">{{ name }}</td>
                     <td>{{ info.total }}</td>
                     <td>{{ info.cpm }}</td>
-                    <td>{{ info.status }}</td>
+                    <td style="color: {{ '#00ff00' if info.status == 'РАБОТАЕТ' else '#ff4444' }}">{{ info.status }}</td>
                     <td>
                         <button class="btn btn-blue" onclick="openEditor('{{ name }}')">ТЕКСТ</button>
                         <button class="btn btn-red" onclick="adminAction('reset', '{{ name }}')">0</button>
@@ -51,37 +66,71 @@
                 {% endfor %}
             </tbody>
         </table>
-        {% if not workers %}
-        <p style="text-align: center; color: #666;">Ожидание подключения сотрудников... (Обновите страницу)</p>
-        {% endif %}
+    </div>
+
+    <div id="filterModal" class="modal">
+        <div class="modal-content">
+            <h3 style="color:#00ff00">Сортировка</h3>
+            <button class="filter-option" onclick="applySort('cpm')">По сообщениям в минуту</button>
+            <button class="filter-option" onclick="applySort('total-desc')">Сообщений (Больше)</button>
+            <button class="filter-option" onclick="applySort('total-asc')">Сообщений (Меньше)</button>
+            <button class="filter-option" onclick="applySort('alpha')">По алфавиту</button>
+            <br>
+            <button class="btn btn-red" onclick="toggleModal('filterModal')">Закрыть</button>
+        </div>
     </div>
 
     <div id="editorModal" class="modal">
-        <div class="modal-content">
-            <h3 id="editTitle">Редактор</h3>
+        <div class="modal-content" style="width: 50%;">
+            <h3 id="editTitle">Файл</h3>
             <textarea id="editArea"></textarea><br><br>
-            <button class="btn btn-blue" onclick="savePhrases()">СОХРАНИТЬ</button>
-            <button class="btn btn-red" onclick="closeEditor()">ЗАКРЫТЬ</button>
+            <button class="btn btn-green" onclick="savePhrases()">СОХРАНИТЬ</button>
+            <button class="btn btn-red" onclick="toggleModal('editorModal')">ЗАКРЫТЬ</button>
         </div>
     </div>
 
     <script>
-        // Передаем данные из Python максимально просто
-        const data = {{ workers|tojson|safe }};
+        const workersData = {{ workers|tojson|safe }};
 
-        function openEditor(name) {
-            document.getElementById('editTitle').innerText = name;
-            document.getElementById('editArea').value = data[name].phrases || "";
-            document.getElementById('editorModal').style.display = "block";
-            window.currentWorker = name;
+        function toggleModal(id) {
+            const m = document.getElementById(id);
+            m.style.display = (m.style.display === 'block') ? 'none' : 'block';
         }
 
-        function closeEditor() { document.getElementById('editorModal').style.display = "none"; }
+        function applySort(type) {
+            const table = document.getElementById("workerTable");
+            const rows = Array.from(table.rows);
+
+            rows.sort((a, b) => {
+                const nameA = a.dataset.name.toLowerCase();
+                const nameB = b.dataset.name.toLowerCase();
+                const totalA = parseInt(a.dataset.total);
+                const totalB = parseInt(b.dataset.total);
+                const cpmA = parseFloat(a.dataset.cpm);
+                const cpmB = parseFloat(b.dataset.cpm);
+
+                if (type === 'cpm') return cpmB - cpmA;
+                if (type === 'total-desc') return totalB - totalA;
+                if (type === 'total-asc') return totalA - totalB;
+                if (type === 'alpha') return nameA.localeCompare(nameB);
+                return 0;
+            });
+
+            rows.forEach(row => table.appendChild(row));
+            toggleModal('filterModal');
+        }
+
+        function openEditor(name) {
+            document.getElementById('editTitle').innerText = "Редактор: " + name;
+            document.getElementById('editArea').value = workersData[name].phrases || "";
+            window.currentWorker = name;
+            toggleModal('editorModal');
+        }
 
         async function savePhrases() {
             const text = document.getElementById('editArea').value;
             await adminAction('set_text', window.currentWorker, text);
-            closeEditor();
+            toggleModal('editorModal');
         }
 
         async function adminAction(action, target, text = "") {
@@ -92,6 +141,14 @@
             });
             location.reload();
         }
+
+        // Автообновление каждые 15 сек (если окна закрыты)
+        setInterval(() => {
+            if (document.getElementById('editorModal').style.display !== 'block' && 
+                document.getElementById('filterModal').style.display !== 'block') {
+                location.reload();
+            }
+        }, 15000);
     </script>
 </body>
 </html>
