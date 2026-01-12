@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GhostType Admin</title>
+    <meta http-equiv="refresh" content="10"> <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: white; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #333; padding: 12px; text-align: left; }
+        th { background: #333; }
+        tr:hover { background: #252525; }
+        .status-run { color: #00ff00; }
+        .status-pause { color: #ff4444; }
+    </style>
+</head>
+<body>
+    <h1>Панель управления GhostType 9991</h1>
+    <table>
+        <tr>
+            <th>Имя (Stage)</th>
+            <th>Всего</th>
+            <th>Статус</th>
+            <th>Режим</th>
+            <th>Скорость</th>
+            <th>Ключ</th>
+            <th>Был в сети</th>
+        </tr>
+        {% for name, info in workers.items() %}
+        <tr>
+            <td>{{ name }}</td>
+            <td><b>{{ info.total }}</b></td>
+            <td class="{{ 'status-run' if info.status == 'РАБОТАЕТ' else 'status-pause' }}">{{ info.status }}</td>
+            <td>{{ info.mode }}</td>
+            <td>{{ info.speed }}s</td>
+            <td><code>{{ info.key }}</code></td>
+            <td>{{ info.last_seen }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
