@@ -15,13 +15,15 @@
         .btn-green { background: #28a745; color: white; }
         .btn-red { background: #dc3545; color: white; }
         .btn-orange { background: #fd7e14; color: white; }
+        .btn-purple { background: #6f42c1; color: white; }
         .btn:hover { filter: brightness(1.2); }
         .top-gun { color: gold !important; font-weight: bold; text-shadow: 0 0 10px gold; }
         .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); }
         .modal-content { background: #1a1a1a; margin: 10% auto; padding: 25px; width: 400px; border-radius: 10px; border: 1px solid #00ff00; text-align: center; }
-        .filter-option { display: block; width: 100%; padding: 10px; margin: 5px 0; background: #222; color: white; border: 1px solid #333; cursor: pointer; border-radius: 5px; text-align: left; }
-        .filter-option:hover { background: #333; border-color: #00ff00; }
-        textarea { width: 100%; height: 200px; background: #000; color: #00ff00; padding: 10px; border-radius: 5px; border: 1px solid #333; }
+        .input-group { text-align: left; margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; color: #888; }
+        .input-group input, .input-group select { width: 100%; padding: 8px; background: #000; border: 1px solid #444; color: #00ff00; border-radius: 5px; box-sizing: border-box; }
+        textarea { width: 100%; height: 200px; background: #000; color: #00ff00; padding: 10px; border-radius: 5px; border: 1px solid #333; box-sizing: border-box; }
     </style>
 </head>
 <body>
@@ -30,8 +32,7 @@
         
         <div class="panel">
             <input type="text" id="globalText" style="background:#000; color:#00ff00; border:1px solid #444; padding:8px; border-radius:5px; flex-grow:1" placeholder="Текст для всех...">
-            <button class="btn btn-blue" onclick="adminAction('set_text', 'all', document.getElementById('globalText').value)">ОТПРАВИТЬ ВСЕМ</button>
-            <button class="btn btn-orange" onclick="toggleModal('filterModal')">🔍 ФИЛЬТР</button>
+            <button class="btn btn-blue" onclick="adminAction('set_text', 'all', {text: document.getElementById('globalText').value})">ОТПРАВИТЬ ВСЕМ</button>
             <button class="btn btn-red" onclick="adminAction('reset', 'all')">СБРОС ВСЕХ</button>
         </div>
 
@@ -49,103 +50,110 @@
         </table>
     </div>
 
-    <div id="filterModal" class="modal">
-        <div class="modal-content">
-            <h3 style="color:#00ff00">Сортировка</h3>
-            <button class="filter-option" onclick="setSort('alpha')">🔤 По алфавиту</button>
-            <button class="filter-option" onclick="setSort('desc')">📈 Сообщений (Больше)</button>
-            <button class="filter-option" onclick="setSort('asc')">📉 Сообщений (Меньше)</button>
-            <br>
-            <button class="btn btn-red" onclick="toggleModal('filterModal')">ЗАКРЫТЬ</button>
+    <div id="editorModal" class="modal">
+        <div class="modal-content" style="width: 60%;">
+            <h3>Редактор фраз</h3>
+            <textarea id="editArea"></textarea><br><br>
+            <button class="btn btn-green" onclick="savePhrases()">СОХРАНИТЬ</button>
+            <button class="btn btn-red" onclick="closeModals()">ЗАКРЫТЬ</button>
         </div>
     </div>
 
-    <div id="editorModal" class="modal">
-        <div class="modal-content" style="width: 60%; max-width: 600px;">
-            <h3 id="editTitle">Файл</h3>
-            <textarea id="editArea"></textarea><br><br>
-            <button class="btn btn-green" onclick="savePhrases()">СОХРАНИТЬ</button>
-            <button class="btn btn-red" onclick="toggleModal('editorModal')">ЗАКРЫТЬ</button>
+    <div id="configModal" class="modal">
+        <div class="modal-content">
+            <h3 id="configTitle" style="color:#00ff00">Конфиг</h3>
+            <div class="input-group">
+                <label>Stage (Режим):</label>
+                <select id="confMode">
+                    <option value="Type">Type</option>
+                    <option value="Paste">Paste</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Скорость (сек):</label>
+                <input type="number" step="0.1" id="confSpeed">
+            </div>
+            <div class="input-group">
+                <label>Сообщений (всего):</label>
+                <input type="number" id="confTotal">
+            </div>
+            <br>
+            <button class="btn btn-green" onclick="saveConfigRemote()">ПРИМЕНИТЬ</button>
+            <button class="btn btn-red" onclick="closeModals()">ОТМЕНА</button>
         </div>
     </div>
 
     <script>
         let currentWorker = "";
-        let currentSort = 'alpha';
 
         async function refreshData() {
-            if (document.getElementById('editorModal').style.display === 'block' || 
-                document.getElementById('filterModal').style.display === 'block') return;
+            if (document.querySelector('.modal[style*="display: block"]')) return;
 
             try {
                 const response = await fetch('/api/get_workers');
-                const workersMap = await response.json();
+                const workers = await response.json();
                 
-                let workersArray = Object.entries(workersMap).map(([name, info]) => ({ name, ...info }));
-
-                if (currentSort === 'alpha') {
-                    workersArray.sort((a, b) => a.name.localeCompare(b.name));
-                } else if (currentSort === 'desc') {
-                    workersArray.sort((a, b) => b.total - a.total);
-                } else if (currentSort === 'asc') {
-                    workersArray.sort((a, b) => a.total - b.total);
-                }
-
                 const tableBody = document.getElementById("workerTable");
-                const onlineCounter = document.getElementById("onlineCounter");
-                
                 let html = "";
-                workersArray.forEach(worker => {
-                    const statusColor = worker.status === 'РАБОТАЕТ' ? '#00ff00' : '#ff4444';
-                    const topGunClass = worker.cpm > 10 ? 'top-gun' : '';
-                    
+
+                Object.entries(workers).forEach(([name, w]) => {
+                    const statusColor = w.status === 'РАБОТАЕТ' ? '#00ff00' : '#ff4444';
                     html += `
                     <tr>
-                        <td class="${topGunClass}">${worker.name} <br><small style="color:#555">mode: ${worker.mode}</small></td>
-                        <td>${worker.total}</td>
-                        <td>${worker.cpm}</td>
-                        <td style="color: ${statusColor}">${worker.status}</td>
+                        <td class="${w.cpm > 10 ? 'top-gun' : ''}">${name} <br><small style="color:#555">mode: ${w.mode}</small></td>
+                        <td>${w.total}</td>
+                        <td>${w.cpm}</td>
+                        <td style="color: ${statusColor}">${w.status}</td>
                         <td>
-                            <button class="btn btn-blue" onclick="openEditor('${worker.name}', \`${worker.phrases}\`)">ТЕКСТ</button>
-                            <button class="btn btn-orange" onclick="adminAction('toggle_status', '${worker.name}')">СТАТУС</button>
-                            <button class="btn btn-red" onclick="adminAction('reset', '${worker.name}')">СБРОС</button>
+                            <button class="btn btn-blue" onclick="openEditor('${name}', \`${w.phrases}\`)">ТЕКСТ</button>
+                            <button class="btn btn-purple" onclick="openConfig('${name}', '${w.mode}', ${w.speed}, ${w.total})">КОНФИГ</button>
+                            <button class="btn btn-orange" onclick="adminAction('toggle_status', '${name}')">СТАТУС</button>
+                            <button class="btn btn-red" onclick="adminAction('reset', '${name}')">СБРОС</button>
                         </td>
                     </tr>`;
                 });
                 tableBody.innerHTML = html;
-                onlineCounter.innerText = `В сети: ${workersArray.length}`;
             } catch (e) { console.error(e); }
-        }
-
-        function setSort(type) {
-            currentSort = type;
-            toggleModal('filterModal');
-            refreshData();
-        }
-
-        function toggleModal(id) {
-            const m = document.getElementById(id);
-            m.style.display = (m.style.display === 'block') ? 'none' : 'block';
         }
 
         function openEditor(name, phrases) {
             currentWorker = name;
-            document.getElementById('editTitle').innerText = "Редактор: " + name;
             document.getElementById('editArea').value = phrases;
-            toggleModal('editorModal');
+            document.getElementById('editorModal').style.display = 'block';
+        }
+
+        function openConfig(name, mode, speed, total) {
+            currentWorker = name;
+            document.getElementById('configTitle').innerText = "Конфиг: " + name;
+            document.getElementById('confMode').value = mode;
+            document.getElementById('confSpeed').value = speed;
+            document.getElementById('confTotal').value = total;
+            document.getElementById('configModal').style.display = 'block';
+        }
+
+        function closeModals() {
+            document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
         }
 
         async function savePhrases() {
-            const text = document.getElementById('editArea').value;
-            await adminAction('set_text', currentWorker, text);
-            toggleModal('editorModal');
+            await adminAction('set_text', currentWorker, {text: document.getElementById('editArea').value});
+            closeModals();
         }
 
-        async function adminAction(action, target, text = "") {
+        async function saveConfigRemote() {
+            await adminAction('update_config', currentWorker, {
+                mode: document.getElementById('confMode').value,
+                speed: document.getElementById('confSpeed').value,
+                total: document.getElementById('confTotal').value
+            });
+            closeModals();
+        }
+
+        async function adminAction(action, target, data = {}) {
             await fetch('/api/admin_action', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({action, target, text})
+                body: JSON.stringify({action, target, ...data})
             });
             refreshData();
         }
