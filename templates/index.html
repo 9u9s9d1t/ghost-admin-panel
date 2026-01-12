@@ -71,7 +71,7 @@
 
     <script>
         let currentWorker = "";
-        let currentSort = 'alpha'; // По умолчанию
+        let currentSort = 'alpha';
 
         async function refreshData() {
             if (document.getElementById('editorModal').style.display === 'block' || 
@@ -81,10 +81,8 @@
                 const response = await fetch('/api/get_workers');
                 const workersMap = await response.json();
                 
-                // Преобразуем объект в массив для сортировки
                 let workersArray = Object.entries(workersMap).map(([name, info]) => ({ name, ...info }));
 
-                // Логика сортировки
                 if (currentSort === 'alpha') {
                     workersArray.sort((a, b) => a.name.localeCompare(b.name));
                 } else if (currentSort === 'desc') {
@@ -109,7 +107,8 @@
                         <td style="color: ${statusColor}">${worker.status}</td>
                         <td>
                             <button class="btn btn-blue" onclick="openEditor('${worker.name}', \`${worker.phrases}\`)">ТЕКСТ</button>
-                            <button class="btn btn-red" onclick="adminAction('reset', '${worker.name}')">0</button>
+                            <button class="btn btn-orange" onclick="adminAction('toggle_status', '${worker.name}')">СТАТУС</button>
+                            <button class="btn btn-red" onclick="adminAction('reset', '${worker.name}')">СБРОС</button>
                         </td>
                     </tr>`;
                 });
