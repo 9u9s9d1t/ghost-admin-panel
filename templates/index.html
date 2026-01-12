@@ -2,37 +2,53 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Ghost Admin</title>
+    <title>Ghost Admin Pro</title>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; padding: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #333; padding: 10px; text-align: left; }
-        th { background: #111; color: #00ff00; }
-        .btn { padding: 5px 10px; cursor: pointer; border: none; margin-right: 5px; }
-        .btn-start { background: #00ff00; }
-        .btn-stop { background: #ff0000; color: white; }
+        body { background: #0a0a0a; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; padding: 20px; }
+        .panel { background: #1a1a1a; padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border-bottom: 1px solid #333; padding: 12px; text-align: left; }
+        th { cursor: pointer; color: #00ff00; background: #111; }
+        th:hover { background: #222; }
+        .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 2px; }
+        .btn-green { background: #28a745; color: white; }
+        .btn-red { background: #dc3545; color: white; }
+        .btn-blue { background: #007bff; color: white; }
+        .top-gun { color: gold; font-weight: bold; text-shadow: 0 0 5px gold; }
+        input[type="text"] { background: #222; border: 1px solid #444; color: white; padding: 8px; width: 250px; border-radius: 4px; }
     </style>
 </head>
 <body>
-    <h1>GhostType Control Panel</h1>
+    <h1>Управление Командой GhostType</h1>
+
+    <div class="panel">
+        <h3>Глобальные действия</h3>
+        <input type="text" id="globalText" placeholder="Текст для всех...">
+        <button class="btn btn-blue" onclick="adminAction('set_text', 'all', document.getElementById('globalText').value)">Отправить всем текст</button>
+        <button class="btn btn-red" onclick="adminAction('reset', 'all')">Сбросить счетчик всем</button>
+    </div>
+
     <table>
         <thead>
             <tr>
-                <th>Имя</th>
-                <th>Сообщения</th>
+                <th onclick="sortTable(0)">Сотрудник ↑↓</th>
+                <th onclick="sortTable(1)">Сообщения ↑↓</th>
+                <th onclick="sortTable(2)">CPM (сообщ/мин) ↑↓</th>
                 <th>Статус</th>
-                <th>Действие</th>
+                <th>Личное управление</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="workerTable">
             {% for name, info in workers.items() %}
             <tr>
-                <td>{{ name }}</td>
+                <td class="{{ 'top-gun' if info.cpm > 10 else '' }}">{{ name }}</td>
                 <td>{{ info.total }}</td>
-                <td>{{ info.status }}</td>
+                <td>{{ info.cpm }}</td>
+                <td style="color: {{ '#00ff00' if info.status == 'РАБОТАЕТ' else '#ff4444' }}">{{ info.status }}</td>
                 <td>
-                    <button class="btn btn-start" onclick="send('{{ name }}', 'force_ready', 'true')">ПУСК</button>
-                    <button class="btn btn-stop" onclick="send('{{ name }}', 'force_ready', 'false')">СТОП</button>
+                    <input type="text" id="text-{{name}}" placeholder="Личный текст...">
+                    <button class="btn btn-blue" onclick="adminAction('set_text', '{{name}}', document.getElementById('text-{{name}}').value)">OK</button>
+                    <button class="btn btn-red" onclick="adminAction('reset', '{{name}}')">Reset</button>
                 </td>
             </tr>
             {% endfor %}
@@ -40,11 +56,40 @@
     </table>
 
     <script>
-        async function send(name, cmd, val) {
-            await fetch(`/api/send_command/${name}/${cmd}/${val}`);
+        async function adminAction(action, target, text = "") {
+            await fetch('/api/admin_action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action, target, text})
+            });
+            alert('Команда отправлена!');
             location.reload();
         }
-        setInterval(() => location.reload(), 10000);
+
+        function sortTable(n) {
+            var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+            table = document.getElementById("workerTable");
+            switching = true; dir = "asc";
+            while (switching) {
+                switching = false; rows = table.rows;
+                for (i = 0; i < (rows.length - 1); i++) {
+                    shouldSwitch = false;
+                    x = rows[i].getElementsByTagName("TD")[n];
+                    y = rows[i + 1].getElementsByTagName("TD")[n];
+                    var xVal = isNaN(parseFloat(x.innerHTML)) ? x.innerHTML.toLowerCase() : parseFloat(x.innerHTML);
+                    var yVal = isNaN(parseFloat(y.innerHTML)) ? y.innerHTML.toLowerCase() : parseFloat(y.innerHTML);
+                    if (dir == "asc") { if (xVal > yVal) { shouldSwitch = true; break; } }
+                    else if (dir == "desc") { if (xVal < yVal) { shouldSwitch = true; break; } }
+                }
+                if (shouldSwitch) {
+                    rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                    switching = true; switchcount ++;
+                } else {
+                    if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; }
+                }
+            }
+        }
+        setInterval(() => location.reload(), 15000);
     </script>
 </body>
 </html>
