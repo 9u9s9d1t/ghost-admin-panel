@@ -19,8 +19,9 @@
         .top-gun { color: gold !important; font-weight: bold; text-shadow: 0 0 10px gold; }
         .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); }
         .modal-content { background: #1a1a1a; margin: 10% auto; padding: 25px; width: 400px; border-radius: 10px; border: 1px solid #00ff00; text-align: center; }
+        .filter-option { display: block; width: 100%; padding: 10px; margin: 5px 0; background: #222; color: white; border: 1px solid #333; cursor: pointer; border-radius: 5px; text-align: left; }
+        .filter-option:hover { background: #333; border-color: #00ff00; }
         textarea { width: 100%; height: 200px; background: #000; color: #00ff00; padding: 10px; border-radius: 5px; border: 1px solid #333; }
-        .status-tag { font-weight: bold; }
     </style>
 </head>
 <body>
@@ -30,6 +31,7 @@
         <div class="panel">
             <input type="text" id="globalText" style="background:#000; color:#00ff00; border:1px solid #444; padding:8px; border-radius:5px; flex-grow:1" placeholder="Текст для всех...">
             <button class="btn btn-blue" onclick="adminAction('set_text', 'all', document.getElementById('globalText').value)">ОТПРАВИТЬ ВСЕМ</button>
+            <button class="btn btn-orange" onclick="toggleModal('filterModal')">🔍 ФИЛЬТР</button>
             <button class="btn btn-red" onclick="adminAction('reset', 'all')">СБРОС ВСЕХ</button>
         </div>
 
@@ -43,9 +45,19 @@
                     <th>УПРАВЛЕНИЕ</th>
                 </tr>
             </thead>
-            <tbody id="workerTable">
-                </tbody>
+            <tbody id="workerTable"></tbody>
         </table>
+    </div>
+
+    <div id="filterModal" class="modal">
+        <div class="modal-content">
+            <h3 style="color:#00ff00">Сортировка</h3>
+            <button class="filter-option" onclick="setSort('alpha')">🔤 По алфавиту</button>
+            <button class="filter-option" onclick="setSort('desc')">📈 Сообщений (Больше)</button>
+            <button class="filter-option" onclick="setSort('asc')">📉 Сообщений (Меньше)</button>
+            <br>
+            <button class="btn btn-red" onclick="toggleModal('filterModal')">ЗАКРЫТЬ</button>
+        </div>
     </div>
 
     <div id="editorModal" class="modal">
@@ -59,42 +71,57 @@
 
     <script>
         let currentWorker = "";
+        let currentSort = 'alpha'; // По умолчанию
 
         async function refreshData() {
-            // Если открыто окно редактирования, не обновляем, чтобы не сбить ввод
-            if (document.getElementById('editorModal').style.display === 'block') return;
+            if (document.getElementById('editorModal').style.display === 'block' || 
+                document.getElementById('filterModal').style.display === 'block') return;
 
             try {
                 const response = await fetch('/api/get_workers');
-                const workers = await response.json();
+                const workersMap = await response.json();
+                
+                // Преобразуем объект в массив для сортировки
+                let workersArray = Object.entries(workersMap).map(([name, info]) => ({ name, ...info }));
+
+                // Логика сортировки
+                if (currentSort === 'alpha') {
+                    workersArray.sort((a, b) => a.name.localeCompare(b.name));
+                } else if (currentSort === 'desc') {
+                    workersArray.sort((a, b) => b.total - a.total);
+                } else if (currentSort === 'asc') {
+                    workersArray.sort((a, b) => a.total - b.total);
+                }
+
                 const tableBody = document.getElementById("workerTable");
                 const onlineCounter = document.getElementById("onlineCounter");
                 
                 let html = "";
-                let count = 0;
-
-                for (const [name, info] of Object.entries(workers)) {
-                    count++;
-                    const statusColor = info.status === 'РАБОТАЕТ' ? '#00ff00' : '#ff4444';
-                    const topGunClass = info.cpm > 10 ? 'top-gun' : '';
+                workersArray.forEach(worker => {
+                    const statusColor = worker.status === 'РАБОТАЕТ' ? '#00ff00' : '#ff4444';
+                    const topGunClass = worker.cpm > 10 ? 'top-gun' : '';
                     
                     html += `
                     <tr>
-                        <td class="${topGunClass}">${name} <br><small style="color:#555">v.${info.mode}</small></td>
-                        <td>${info.total}</td>
-                        <td>${info.cpm}</td>
-                        <td style="color: ${statusColor}">${info.status}</td>
+                        <td class="${topGunClass}">${worker.name} <br><small style="color:#555">mode: ${worker.mode}</small></td>
+                        <td>${worker.total}</td>
+                        <td>${worker.cpm}</td>
+                        <td style="color: ${statusColor}">${worker.status}</td>
                         <td>
-                            <button class="btn btn-blue" onclick="openEditor('${name}', \`${info.phrases}\`)">ТЕКСТ</button>
-                            <button class="btn btn-red" onclick="adminAction('reset', '${name}')">0</button>
+                            <button class="btn btn-blue" onclick="openEditor('${worker.name}', \`${worker.phrases}\`)">ТЕКСТ</button>
+                            <button class="btn btn-red" onclick="adminAction('reset', '${worker.name}')">0</button>
                         </td>
                     </tr>`;
-                }
+                });
                 tableBody.innerHTML = html;
-                onlineCounter.innerText = `В сети: ${count}`;
-            } catch (e) {
-                console.error("Ошибка обновления:", e);
-            }
+                onlineCounter.innerText = `В сети: ${workersArray.length}`;
+            } catch (e) { console.error(e); }
+        }
+
+        function setSort(type) {
+            currentSort = type;
+            toggleModal('filterModal');
+            refreshData();
         }
 
         function toggleModal(id) {
@@ -124,7 +151,6 @@
             refreshData();
         }
 
-        // Обновление каждые 3 секунды
         setInterval(refreshData, 3000);
         refreshData();
     </script>
