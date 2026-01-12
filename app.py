@@ -7,14 +7,12 @@ app = Flask(__name__)
 
 # --- НАСТРОЙКИ БЕЗОПАСНОСТИ ---
 USER_LOGIN = "Admin"
-USER_PASSWORD = "GhostType9991" # <-- ИЗМЕНИТЕ ЭТОТ ПАРОЛЬ
+USER_PASSWORD = "GhostType9991"
 
-# Хранилище данных
 workers = {}
 commands_queue = {}
 global_settings = {"common_text": ""}
 
-# --- ФУНКЦИИ АВТОРИЗАЦИИ ---
 def check_auth(username, password):
     return username == USER_LOGIN and password == USER_PASSWORD
 
@@ -115,6 +113,13 @@ def admin_action():
                 commands_queue[target]["reset_stats"] = True
                 if target in workers:
                     workers[target]['start_session'] = datetime.now()
+
+        # НОВОЕ: Переключение статуса
+        elif action == "toggle_status":
+            if target in workers:
+                is_ready = workers[target].get("status") == "РАБОТАЕТ"
+                if target not in commands_queue: commands_queue[target] = {}
+                commands_queue[target]["set_status"] = not is_ready
 
         return jsonify({"status": "success"})
     except Exception as e:
