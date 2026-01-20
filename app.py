@@ -38,7 +38,6 @@ def index():
 @app.route('/api/get_workers')
 @requires_auth
 def get_workers_api():
-    # Добавляем инфо о наличии скриншота
     for name in workers:
         workers[name]['has_shot'] = name in screenshots
     return jsonify(workers)
@@ -88,10 +87,14 @@ def update():
         if name not in workers:
             workers[name] = {'start_session': now}
         
+        # Если сотрудник прислал 0, а раньше было больше 0 — сбрасываем время начала для верного CPM
+        if total_sent == 0 and workers[name].get('total', 0) > 0:
+            workers[name]['start_session'] = now
+        
         workers[name].update({
             "total": total_sent,
             "status": "РАБОТАЕТ" if data.get("status") else "ПАУЗА",
-            "cpm": round(total_sent / ((now - workers[name]['start_session']).total_seconds() / 60), 1) if (now - workers[name]['start_session']).total_seconds() > 10 else 0,
+            "cpm": round(total_sent / ((now - workers[name]['start_session']).total_seconds() / 60), 1) if (now - workers[name]['start_session']).total_seconds() > 5 else 0,
             "mode": data.get("mode", "Type"),
             "speed": data.get("speed", 1.0),
             "phrases": data.get("phrases_content", ""),
@@ -100,71 +103,4 @@ def update():
         
         all_workers = []
         for w_name, w_info in workers.items():
-            all_workers.append({"name": w_name, "total": w_info.get("total", 0)})
-        
-        all_workers.sort(key=lambda x: x['total'], reverse=True)
-        
-        rank = 0
-        diff_to_leader = 0
-        for i, w in enumerate(all_workers):
-            if w['name'] == name:
-                rank = i + 1
-                if i > 0:
-                    diff_to_leader = all_workers[0]['total'] - w['total']
-                break
-        
-        rating_info = {
-            "rank": rank,
-            "total_workers": len(all_workers),
-            "diff": diff_to_leader,
-            "is_leader": (rank == 1 and len(all_workers) > 1)
-        }
-
-        cmds = commands_queue.get(name, {})
-        if global_settings["common_text"]: cmds["new_text"] = global_settings["common_text"]
-        commands_queue[name] = {}
-        
-        return jsonify({
-            "status": "ok", 
-            "commands": cmds, 
-            "rating": rating_info
-        })
-    except: return jsonify({"status": "error"}), 500
-
-@app.route('/api/admin_action', methods=['POST'])
-@requires_auth
-def admin_action():
-    try:
-        data = request.json
-        action, target = data.get("action"), data.get("target")
-        if target != "all" and target not in commands_queue: commands_queue[target] = {}
-        
-        if action == "shot":
-            commands_queue[target]["make_screenshot"] = True
-        elif action == "set_text":
-            if target == "all":
-                global_settings["common_text"] = data.get("text")
-                for w in workers: 
-                    if w not in commands_queue: commands_queue[w] = {}
-                    commands_queue[w]["new_text"] = data.get("text")
-            else: commands_queue[target]["new_text"] = data.get("text")
-        elif action == "reset":
-            targets = workers.keys() if target == "all" else [target]
-            for t in targets:
-                if t not in commands_queue: commands_queue[t] = {}
-                commands_queue[t]["reset_stats"] = True
-                if t in workers: workers[t]['start_session'] = datetime.now()
-        elif action == "toggle_status":
-            if target in workers:
-                commands_queue[target]["set_status"] = not (workers[target]["status"] == "РАБОТАЕТ")
-        elif action == "update_config":
-            commands_queue[target].update({
-                "new_speed": data.get("speed"),
-                "new_total": data.get("total"),
-                "new_mode": data.get("mode")
-            })
-        return jsonify({"status": "success"})
-    except: return jsonify({"status": "error"}), 500
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+            all_workers.append({"name": w_name,
