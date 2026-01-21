@@ -4,96 +4,146 @@
     <meta charset="UTF-8">
     <title>Ghost Admin Pro</title>
     <style>
-        body { background: #0a0a0a; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .panel { background: #1a1a1a; padding: 20px; border-radius: 10px; border: 1px solid #333; margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
-        table { width: 100%; border-collapse: collapse; background: #111; border-radius: 8px; overflow: hidden; }
-        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #222; }
-        th { background: #000; color: #00ff00; }
-        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s; text-decoration: none; display: inline-block; }
-        .btn-blue { background: #007bff; color: white; }
-        .btn-green { background: #28a745; color: white; }
-        .btn-red { background: #dc3545; color: white; }
-        .btn-orange { background: #fd7e14; color: white; }
-        .btn-purple { background: #6f42c1; color: white; }
-        .btn-cyan { background: #17a2b8; color: white; }
-        .btn:hover { filter: brightness(1.2); }
-        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); }
-        .modal-content { background: #1a1a1a; margin: 5% auto; padding: 25px; width: 80%; border-radius: 10px; border: 1px solid #00ff00; text-align: center; max-height: 80vh; overflow-y: auto; }
-        .input-group { text-align: left; margin-bottom: 15px; }
-        .input-group label { display: block; margin-bottom: 5px; color: #888; }
-        .input-group input, .input-group select { width: 100%; padding: 8px; background: #000; border: 1px solid #444; color: #00ff00; border-radius: 5px; box-sizing: border-box; }
-        textarea { width: 100%; height: 200px; background: #000; color: #00ff00; padding: 10px; border-radius: 5px; border: 1px solid #333; box-sizing: border-box; }
-        #shotImg { max-width: 100%; border: 1px solid #333; margin-top: 10px; }
+        :root { --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #c9d1d9; --accent: #238636; }
+        body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 1300px; margin: 0 auto; }
+        
+        /* Header & Panel */
+        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .panel { background: var(--panel); padding: 20px; border-radius: 8px; border: 1px solid var(--border); display: flex; gap: 12px; margin-bottom: 20px; }
+        
+        /* Table Style */
+        .table-container { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { background: #000; color: #8b949e; font-size: 12px; text-transform: uppercase; padding: 15px; }
+        td { padding: 12px 15px; border-top: 1px solid var(--border); vertical-align: middle; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+
+        /* Buttons */
+        .btn { padding: 6px 12px; border: 1px solid rgba(240,246,255,0.1); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: 0.2s; color: white; }
+        .btn:active { transform: translateY(1px); }
+        .btn-blue { background: #1f6feb; }
+        .btn-green { background: #238636; }
+        .btn-red { background: #da3633; }
+        .btn-orange { background: #d29922; }
+        .btn-purple { background: #8957e5; }
+        .btn-cyan { background: #0891b2; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: #8b949e; }
+        .btn-outline:hover { border-color: #8b949e; color: #fff; }
+
+        /* Status Colors */
+        .status-badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+        .status-on { background: rgba(46, 160, 67, 0.15); color: #3fb950; border: 1px solid rgba(46,160,67,0.4); }
+        .status-off { background: rgba(248, 81, 73, 0.15); color: #f85149; border: 1px solid rgba(248,81,73,0.4); }
+
+        /* Modals */
+        .modal { display: none; position: fixed; z-index: 1000; left:0; top:0; width:100%; height:100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(4px); }
+        .modal-content { background: var(--panel); margin: 5% auto; padding: 25px; width: 50%; border-radius: 12px; border: 1px solid var(--border); position: relative; }
+        
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; font-size: 13px; color: #8b949e; }
+        input, select, textarea { width: 100%; padding: 8px; background: #0d1117; border: 1px solid var(--border); color: #fff; border-radius: 6px; box-sizing: border-box; }
+        textarea { height: 250px; font-family: monospace; }
+        
+        .actions-cell { display: flex; gap: 5px; flex-wrap: wrap; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>GhostType Control Panel <span id="onlineCounter" style="font-size: 14px; color: #666;"></span></h1>
-        <div class="panel">
-            <input type="text" id="globalText" style="background:#000; color:#00ff00; border:1px solid #444; padding:8px; border-radius:5px; flex-grow:1" placeholder="Текст для всех...">
-            <button class="btn btn-blue" onclick="adminAction('set_text', 'all', {text: document.getElementById('globalText').value})">ОТПРАВИТЬ ВСЕМ</button>
-            <a href="/api/download_report" class="btn btn-green">📊 СКАЧАТЬ ОТЧЕТ</a>
-            <button class="btn btn-red" onclick="adminAction('reset', 'all')">СБРОС ВСЕХ</button>
+        <div class="header-flex">
+            <h1>GhostType Dashboard <span id="onlineCounter" style="font-size: 16px; color: #8b949e; margin-left:15px;"></span></h1>
+            <div>
+                <a href="/api/download_report" class="btn btn-green">📊 СКАЧАТЬ ОТЧЕТ</a>
+            </div>
         </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>СОТРУДНИК</th>
-                    <th>СООБЩЕНИЙ</th>
-                    <th>CPM</th>
-                    <th>СТАТУС</th>
-                    <th>УПРАВЛЕНИЕ</th>
-                </tr>
-            </thead>
-            <tbody id="workerTable"></tbody>
-        </table>
+
+        <div class="panel">
+            <input type="text" id="globalText" placeholder="Введите текст, который увидят все сотрудники...">
+            <button class="btn btn-blue" style="white-space:nowrap" onclick="adminAction('set_text', 'all', {text: document.getElementById('globalText').value})">ОТПРАВИТЬ ВСЕМ</button>
+            <button class="btn btn-outline" onclick="adminAction('reset', 'all')">СБРОСИТЬ ВСЕХ</button>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>СОТРУДНИК</th>
+                        <th>РЕЖИМ</th>
+                        <th>СООБЩЕНИЙ</th>
+                        <th>CPM</th>
+                        <th>СТАТУС</th>
+                        <th>ПОСЛЕДНИЙ ВХОД</th>
+                        <th>УПРАВЛЕНИЕ</th>
+                    </tr>
+                </thead>
+                <tbody id="workerTable"></tbody>
+            </table>
+        </div>
     </div>
 
-    <div id="editorModal" class="modal"><div class="modal-content" style="width: 60%;"><h3>Редактор фразы</h3><textarea id="editArea"></textarea><br><br><button class="btn btn-green" onclick="savePhrases()">ОК</button> <button class="btn btn-red" onclick="closeModals()">ЗАКРЫТЬ</button></div></div>
+    <div id="editorModal" class="modal"><div class="modal-content"><h3>Редактор фраз</h3><textarea id="editArea"></textarea><div style="margin-top:15px"><button class="btn btn-green" onclick="savePhrases()">СОХРАНИТЬ</button> <button class="btn btn-outline" onclick="closeModals()">ОТМЕНА</button></div></div></div>
     
-    <div id="shotModal" class="modal"><div class="modal-content"><h3>Скриншот сотрудника</h3><div id="shotLoading">Загрузка...</div><img id="shotImg" src=""><br><br><button class="btn btn-red" onclick="closeModals()">ЗАКРЫТЬ</button></div></div>
+    <div id="shotModal" class="modal"><div class="modal-content" style="width: 80%;"><h3>Скриншот</h3><div id="shotLoading"></div><img id="shotImg" style="width:100%; border-radius:8px; display:none;"><br><br><button class="btn btn-outline" onclick="closeModals()">ЗАКРЫТЬ</button></div></div>
 
-    <div id="configModal" class="modal"><div class="modal-content" style="width: 400px;"><h3>Конфиг сотрудника</h3>
-        <div class="input-group"><label>Stage:</label><select id="confMode"><option value="Type">Type</option><option value="Paste">Paste</option></select></div>
-        <div class="input-group"><label>Скорость:</label><input type="number" step="0.1" id="confSpeed"></div>
-        <div class="input-group"><label>Сообщений:</label><input type="number" id="confTotal"></div>
-        <button class="btn btn-green" onclick="saveConfigRemote()">СОХРАНИТЬ</button> <button class="btn btn-red" onclick="closeModals()">ОТМЕНА</button>
+    <div id="configModal" class="modal"><div class="modal-content" style="width: 350px;"><h3>Конфигурация</h3>
+        <div class="input-group"><label>Метод отправки</label><select id="confMode"><option value="Type">Type (Печать)</option><option value="Paste">Paste (Вставка)</option></select></div>
+        <div class="input-group"><label>Задержка (сек)</label><input type="number" step="0.1" id="confSpeed"></div>
+        <div class="input-group"><label>Счетчик сообщений</label><input type="number" id="confTotal"></div>
+        <button class="btn btn-green" onclick="saveConfigRemote()">ОБНОВИТЬ</button> <button class="btn btn-outline" onclick="closeModals()">ОТМЕНА</button>
     </div></div>
 
     <script>
         let currentWorker = "";
+
         async function refreshData() {
+            // Если открыто модальное окно, не обновляем таблицу, чтобы фокус не слетал
             if (document.querySelector('.modal[style*="display: block"]')) return;
-            const res = await fetch('/api/get_workers');
-            const workers = await res.json();
-            let html = "";
-            const sortedEntries = Object.entries(workers).sort((a, b) => a[0].localeCompare(b[0]));
-            sortedEntries.forEach(([name, w]) => {
-                html += `<tr>
-                    <td>${name}<br><small style="color:#555">${w.mode}</small></td>
-                    <td>${w.total}</td><td>${w.cpm}</td>
-                    <td style="color:${w.status === 'РАБОТАЕТ' ? '#00ff00' : '#ff4444'}">${w.status}</td>
-                    <td>
-                        <button class="btn btn-cyan" onclick="takeShot('${name}')">📸 СКРИН</button>
-                        <button class="btn btn-blue" onclick="openEditor('${name}', \`${w.phrases}\`)">ТЕКСТ</button>
-                        <button class="btn btn-purple" onclick="openConfig('${name}', '${w.mode}', ${w.speed}, ${w.total})">КОНФИГ</button>
-                        <button class="btn btn-orange" onclick="adminAction('toggle_status', '${name}')">СТАТУС</button>
-                        <button class="btn btn-red" onclick="adminAction('reset', '${name}')">СБРОС</button>
-                    </td>
-                </tr>`;
-            });
-            document.getElementById("workerTable").innerHTML = html;
+            
+            try {
+                const res = await fetch('/api/get_workers');
+                const workers = await res.json();
+                let html = "";
+                const sortedEntries = Object.entries(workers).sort((a, b) => b[1].total - a[1].total);
+                
+                sortedEntries.forEach(([name, w]) => {
+                    const statusClass = w.status === 'РАБОТАЕТ' ? 'status-on' : 'status-off';
+                    html += `<tr>
+                        <td><strong>${name}</strong></td>
+                        <td><code style="color:#8b949e">${w.mode}</code></td>
+                        <td><span style="color:#3fb950; font-weight:bold">${w.total}</span></td>
+                        <td>${w.cpm}</td>
+                        <td><span class="status-badge ${statusClass}">${w.status}</span></td>
+                        <td><small style="color:#555">${w.last_seen || '...'}</small></td>
+                        <td>
+                            <div class="actions-cell">
+                                <button class="btn btn-cyan" onclick="takeShot('${name}')" title="Скриншот">📸</button>
+                                <button class="btn btn-blue" onclick="openEditor('${name}', \`${w.phrases}\`)" title="Текст">TXT</button>
+                                <button class="btn btn-purple" onclick="openConfig('${name}', '${w.mode}', ${w.speed}, ${w.total})" title="Настройки">⚙️</button>
+                                <button class="btn btn-orange" onclick="adminAction('toggle_status', '${name}')" title="Пауза/Пуск">⏯</button>
+                                <button class="btn btn-outline" onclick="adminAction('reset', '${name}')" title="Сброс">🔄</button>
+                                <button class="btn btn-red" onclick="deleteWorker('${name}')" title="Удалить">🗑</button>
+                            </div>
+                        </td>
+                    </tr>`;
+                });
+                document.getElementById("workerTable").innerHTML = html;
+                document.getElementById("onlineCounter").innerText = `Всего: ${Object.keys(workers).length}`;
+            } catch (e) { console.error("Sync error"); }
         }
 
+        async function deleteWorker(name) {
+            if (confirm(`Вы действительно хотите удалить сотрудника ${name}? Он исчезнет из списка, пока снова не запустит программу.`)) {
+                await adminAction('delete', name);
+            }
+        }
+
+        // --- Вспомогательные функции (без изменений логики) ---
         async function takeShot(name) {
             currentWorker = name;
             await adminAction('shot', name);
             document.getElementById('shotModal').style.display = 'block';
             document.getElementById('shotImg').style.display = 'none';
-            document.getElementById('shotLoading').innerText = "Запрос отправлен... Ждем синхронизации (до 10 сек)";
-            
-            // Пытаемся получить скриншот несколько раз
+            document.getElementById('shotLoading').innerText = "Запрашиваю скриншот... Ожидайте.";
             let attempts = 0;
             const checkShot = setInterval(async () => {
                 const res = await fetch(`/api/get_screenshot/${name}`);
@@ -104,8 +154,8 @@
                     document.getElementById('shotLoading').innerText = "";
                     clearInterval(checkShot);
                 }
-                if (++attempts > 15) {
-                    document.getElementById('shotLoading').innerText = "Тайм-аут ожидания скриншота.";
+                if (++attempts > 10) {
+                    document.getElementById('shotLoading').innerText = "Сотрудник не ответил (оффлайн?)";
                     clearInterval(checkShot);
                 }
             }, 2000);
@@ -129,9 +179,10 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({action, target, ...data})
             });
-            if (action !== 'shot') refreshData();
+            refreshData();
         }
-        setInterval(refreshData, 3000); refreshData();
+        setInterval(refreshData, 3000); 
+        refreshData();
     </script>
 </body>
 </html>
