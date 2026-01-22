@@ -27,27 +27,13 @@ def index(): return render_template('index.html')
 @requires_auth
 def get_workers_api(): return jsonify(workers)
 
-@app.route('/api/get_screenshot/<name>')
-@requires_auth
-def get_screenshot(name):
-    if name in screenshots: return jsonify({"image": screenshots[name]})
-    return jsonify({"error": "not found"}), 404
-
-@app.route('/api/upload_shot', methods=['POST'])
-def upload_shot():
-    data = request.json
-    if data.get("name") and data.get("image"):
-        screenshots[data["name"]] = data["image"]; return jsonify({"status": "ok"})
-    return jsonify({"status": "error"}), 400
-
 @app.route('/api/update', methods=['POST'])
 def update():
     data = request.json
     name = data.get("name")
     if not name: return jsonify({"status": "error"}), 400
     
-    # КИЕВСКОЕ ВРЕМЯ (UTC+2)
-    now = datetime.utcnow() + timedelta(hours=2)
+    now = datetime.utcnow() + timedelta(hours=2) # Киев
     
     if name not in workers: workers[name] = {'start_session': now}
     
@@ -63,6 +49,8 @@ def update():
     
     all_w = sorted(workers.items(), key=lambda x: x[1].get('total', 0), reverse=True)
     rank = next((i for i, v in enumerate(all_w) if v[0] == name), 0) + 1
+    
+    # Отправляем команды
     return jsonify({"status": "ok", "commands": commands_queue.pop(name, {}), "rating": {"rank": rank, "diff": 0, "is_leader": rank == 1}})
 
 @app.route('/api/admin_action', methods=['POST'])
@@ -76,37 +64,53 @@ def admin_action():
         if action == 'delete':
             for d in [workers, screenshots, commands_queue]: 
                 if t in d: del d[t]
+        elif action == 'set_config':
+            c = data.get('config', {})
+            new_name = c.get('name')
+            
+            # СЛОЖНАЯ ЛОГИКА ПЕРЕИМЕНОВАНИЯ:
+            if new_name and new_name != t:
+                # 1. Даем команду клиенту сменить имя
+                if t not in commands_queue: commands_queue[t] = {}
+                commands_queue[t]['new_name'] = new_name
+                
+                # 2. Переносим все данные в новый ключ в БД сервера
+                if t in workers:
+                    workers[new_name] = workers.pop(t)
+                if t in screenshots:
+                    screenshots[new_name] = screenshots.pop(t)
+                
+                # 3. Переключаем контекст на новое имя для остальных настроек
+                t = new_name
+            
+            if t not in commands_queue: commands_queue[t] = {}
+            if 'speed' in c: commands_queue[t]['new_speed'] = float(c['speed'])
+            if 'mode' in c: commands_queue[t]['new_mode'] = c['mode']
+            if 'total' in c: commands_queue[t]['new_total'] = int(c['total'])
+            
         else:
             if t not in commands_queue: commands_queue[t] = {}
-            
-            if action == 'set_config':
-                c = data.get('config', {})
-                new_name = c.get('name')
-                
-                # ЛОГИКА ПЕРЕИМЕНОВАНИЯ БЕЗ ДУБЛИКАТОВ
-                if new_name and new_name != t:
-                    commands_queue[t]['new_name'] = new_name
-                    # Переносим данные в новый ключ и удаляем старый
-                    if t in workers:
-                        workers[new_name] = workers.pop(t)
-                    if t in screenshots:
-                        screenshots[new_name] = screenshots.pop(t)
-                    if t in commands_queue:
-                        commands_queue[new_name] = commands_queue.pop(t)
-                    # Теперь целевой объект для остальных настроек — это новое имя
-                    t = new_name 
-                
-                if 'speed' in c: commands_queue[t]['new_speed'] = c['speed']
-                if 'mode' in c: commands_queue[t]['new_mode'] = c['mode']
-                if 'total' in c: commands_queue[t]['new_total'] = c['total']
-                
-            elif action == 'shot': commands_queue[t]['make_screenshot'] = True
+            if action == 'shot': commands_queue[t]['make_screenshot'] = True
             elif action == 'set_text': commands_queue[t]['new_text'] = data.get('text')
             elif action == 'reset': commands_queue[t]['reset_stats'] = True
             elif action == 'toggle_status':
-                is_active = (workers.get(t, {}).get('status') == "РАБОТАЕТ")
-                commands_queue[t]['set_status'] = not is_active
+                curr_s = (workers.get(t, {}).get('status') == "РАБОТАЕТ")
+                commands_queue[t]['set_status'] = not curr_s
                 
     return jsonify({"status": "ok"})
+
+# Роуты скриншотов остаются без изменений
+@app.route('/api/get_screenshot/<name>')
+@requires_auth
+def get_screenshot(name):
+    if name in screenshots: return jsonify({"image": screenshots[name]})
+    return jsonify({"error": "not found"}), 404
+
+@app.route('/api/upload_shot', methods=['POST'])
+def upload_shot():
+    data = request.json
+    if data.get("name") and data.get("image"):
+        screenshots[data["name"]] = data["image"]; return jsonify({"status": "ok"})
+    return jsonify({"status": "error"}), 400
 
 if __name__ == '__main__': app.run(debug=True)
