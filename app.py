@@ -71,23 +71,42 @@ def admin_action():
     data = request.json
     action, target = data.get("action"), data.get("target")
     targets = list(workers.keys()) if target == 'all' else [target]
+    
     for t in targets:
-        if t not in commands_queue: commands_queue[t] = {}
         if action == 'delete':
             for d in [workers, screenshots, commands_queue]: 
                 if t in d: del d[t]
-        elif action == 'set_config':
-            c = data.get('config', {})
-            if 'speed' in c: commands_queue[t]['new_speed'] = c['speed']
-            if 'mode' in c: commands_queue[t]['new_mode'] = c['mode']
-            if 'total' in c: commands_queue[t]['new_total'] = c['total']
-            if 'name' in c and c['name'] != t:
-                commands_queue[t]['new_name'] = c['name']
-                workers[c['name']] = workers.pop(t) # Мгновенный перенос в БД
-        elif action == 'shot': commands_queue[t]['make_screenshot'] = True
-        elif action == 'set_text': commands_queue[t]['new_text'] = data.get('text')
-        elif action == 'reset': commands_queue[t]['reset_stats'] = True
-        elif action == 'toggle_status': commands_queue[t]['set_status'] = not (workers.get(t,{}).get('status')=="РАБОТАЕТ")
+        else:
+            if t not in commands_queue: commands_queue[t] = {}
+            
+            if action == 'set_config':
+                c = data.get('config', {})
+                new_name = c.get('name')
+                
+                # ЛОГИКА ПЕРЕИМЕНОВАНИЯ БЕЗ ДУБЛИКАТОВ
+                if new_name and new_name != t:
+                    commands_queue[t]['new_name'] = new_name
+                    # Переносим данные в новый ключ и удаляем старый
+                    if t in workers:
+                        workers[new_name] = workers.pop(t)
+                    if t in screenshots:
+                        screenshots[new_name] = screenshots.pop(t)
+                    if t in commands_queue:
+                        commands_queue[new_name] = commands_queue.pop(t)
+                    # Теперь целевой объект для остальных настроек — это новое имя
+                    t = new_name 
+                
+                if 'speed' in c: commands_queue[t]['new_speed'] = c['speed']
+                if 'mode' in c: commands_queue[t]['new_mode'] = c['mode']
+                if 'total' in c: commands_queue[t]['new_total'] = c['total']
+                
+            elif action == 'shot': commands_queue[t]['make_screenshot'] = True
+            elif action == 'set_text': commands_queue[t]['new_text'] = data.get('text')
+            elif action == 'reset': commands_queue[t]['reset_stats'] = True
+            elif action == 'toggle_status':
+                is_active = (workers.get(t, {}).get('status') == "РАБОТАЕТ")
+                commands_queue[t]['set_status'] = not is_active
+                
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__': app.run(debug=True)
