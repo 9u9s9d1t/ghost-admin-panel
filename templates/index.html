@@ -11,22 +11,22 @@
         table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
         th { background: #000; font-size: 12px; color: #8b949e; }
-        .btn { padding: 6px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; color: white; font-weight: bold; font-size: 13px; }
+        .btn { padding: 6px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; color: white; font-weight: bold; font-size: 13px; margin: 2px; }
         .btn-blue { background: #1f6feb; } .btn-green { background: #238636; } .btn-red { background: #da3633; }
         .btn-purple { background: #8957e5; } .btn-cyan { background: #0891b2; } .btn-orange { background: #d29922; }
-        input { background: #000; border: 1px solid var(--border); color: #00ff00; padding: 8px; border-radius: 5px; flex-grow: 1; }
-        .modal { display: none; position: fixed; left:0; top:0; width:100%; height:100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); }
-        .modal-content { background: var(--panel); margin: 5% auto; padding: 20px; width: 50%; border: 1px solid var(--border); border-radius: 10px; }
+        input, select { background: #000; border: 1px solid var(--border); color: #00ff00; padding: 8px; border-radius: 5px; }
+        .modal { display: none; position: fixed; left:0; top:0; width:100%; height:100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); z-index: 1000; }
+        .modal-content { background: var(--panel); margin: 5% auto; padding: 20px; width: 40%; border: 1px solid var(--border); border-radius: 10px; }
+        label { display: block; margin-top: 10px; color: #8b949e; font-size: 12px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>GhostType Pro <span id="cnt" style="font-size:14px; color:#555"></span></h1>
+        <h1>GhostType Pro</h1>
         <div class="panel">
-            <input type="text" id="gt" placeholder="Текст для всех...">
-            <button class="btn btn-blue" onclick="act('set_text','all',{text:document.getElementById('gt').value})">ВСЕМ</button>
-            <a href="/api/download_report" class="btn btn-green">ОТЧЕТ</a>
-            <button class="btn btn-red" onclick="act('reset','all')">СБРОС ВСЕХ</button>
+            <input type="text" id="gt" placeholder="Текст для всех..." style="flex-grow: 1;">
+            <button class="btn btn-blue" onclick="act('set_text','all',{text:document.getElementById('gt').value})">ОБНОВИТЬ ФРАЗЫ ВСЕМ</button>
+            <button class="btn btn-red" onclick="if(confirm('Сбросить статистику всем?'))act('reset','all')">СБРОС ВСЕХ</button>
         </div>
         <table>
             <thead><tr><th>СОТРУДНИК</th><th>MSG</th><th>CPM</th><th>СТАТУС</th><th>ДЕЙСТВИЯ</th></tr></thead>
@@ -35,33 +35,76 @@
     </div>
 
     <div id="edM" class="modal"><div class="modal-content"><h3>Текст</h3><textarea id="ea" style="width:100%;height:300px;background:#000;color:#0f0"></textarea><br><br><button class="btn btn-green" onclick="saveT()">ОК</button> <button class="btn btn-red" onclick="cls()">Х</button></div></div>
+    
     <div id="shM" class="modal"><div class="modal-content" style="width:80%"><img id="si" style="width:100%"><br><button class="btn btn-red" onclick="cls()">ЗАКРЫТЬ</button></div></div>
+
+    <div id="cfgM" class="modal">
+        <div class="modal-content">
+            <h3>Настройки: <span id="cfgName"></span></h3>
+            <label>Скорость набора (задержка):</label>
+            <input type="number" id="cfgSpeed" step="0.1" style="width:95%">
+            <label>Режим ввода:</label>
+            <select id="cfgMode" style="width:100%">
+                <option value="Type">Type (Печать)</option>
+                <option value="Paste (Вставка)">Paste</option>
+            </select>
+            <label>Количество сообщений:</label>
+            <input type="number" id="cfgTotal" style="width:95%">
+            <br><br>
+            <button class="btn btn-green" onclick="saveCfg()">ПРИМЕНИТЬ</button> 
+            <button class="btn btn-red" onclick="cls()">ОТМЕНА</button>
+        </div>
+    </div>
     
     <script>
         let curr = "";
         async function ref() {
             if (document.querySelector('.modal[style*="block"]')) return;
-            const res = await fetch('/api/get_workers');
-            const ws = await res.json();
-            let h = "";
-            Object.entries(ws).sort((a,b)=>b[1].total - a[1].total).forEach(([n, w]) => {
-                h += `<tr><td><b>${n}</b><br><small>${w.mode} (${w.last_seen})</small></td>
-                <td>${w.total}</td><td>${w.cpm}</td>
-                <td style="color:${w.status=='РАБОТАЕТ'?'#238636':'#da3633'}">${w.status}</td>
-                <td>
-                    <button class="btn btn-cyan" onclick="shot('${n}')">📸</button>
-                    <button class="btn btn-blue" onclick="openE('${n}','${w.phrases}')">TXT</button>
-                    <button class="btn btn-orange" onclick="act('toggle_status','${n}')">⏯</button>
-                    <button class="btn btn-red" onclick="if(confirm('Удалить?'))act('delete','${n}')">🗑</button>
-                </td></tr>`;
-            });
-            document.getElementById("tb").innerHTML = h;
+            try {
+                const res = await fetch('/api/get_workers');
+                const ws = await res.json();
+                let h = "";
+                Object.entries(ws).sort((a,b)=>b[1].total - a[1].total).forEach(([n, w]) => {
+                    h += `<tr><td><b>${n}</b><br><small>${w.mode} (скорость: ${w.speed})</small></td>
+                    <td>${w.total}</td><td>${w.cpm}</td>
+                    <td style="color:${w.status=='РАБОТАЕТ'?'#238636':'#da3633'}">${w.status}</td>
+                    <td>
+                        <button class="btn btn-cyan" title="Скриншот" onclick="shot('${n}')">📸</button>
+                        <button class="btn btn-blue" title="Фразы" onclick="openE('${n}','${w.phrases}')">TXT</button>
+                        <button class="btn btn-purple" title="Конфиг" onclick="openCfg('${n}', ${w.speed}, '${w.mode}', ${w.total})">⚙️</button>
+                        <button class="btn btn-orange" title="Старт/Пауза" onclick="act('toggle_status','${n}')">⏯</button>
+                        <button class="btn btn-red" onclick="if(confirm('Удалить?'))act('delete','${n}')">🗑</button>
+                    </td></tr>`;
+                });
+                document.getElementById("tb").innerHTML = h;
+            } catch(e) {}
         }
+
+        function openCfg(n, speed, mode, total) {
+            curr = n;
+            document.getElementById('cfgName').innerText = n;
+            document.getElementById('cfgSpeed').value = speed;
+            document.getElementById('cfgMode').value = mode;
+            document.getElementById('cfgTotal').value = total;
+            document.getElementById('cfgM').style.display = 'block';
+        }
+
+        async function saveCfg() {
+            const config = {
+                speed: document.getElementById('cfgSpeed').value,
+                mode: document.getElementById('cfgMode').value,
+                total: document.getElementById('cfgTotal').value
+            };
+            await act('set_config', curr, {config: config});
+            cls();
+        }
+
         function openE(n,p){ curr=n; document.getElementById('ea').value=p; document.getElementById('edM').style.display='block';}
         function cls(){ document.querySelectorAll('.modal').forEach(m=>m.style.display='none');}
         async function saveT(){ await act('set_text',curr,{text:document.getElementById('ea').value}); cls();}
         async function act(action,target,data={}){ await fetch('/api/admin_action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,target,...data})}); ref();}
         async function shot(n){ await act('shot',n); document.getElementById('shM').style.display='block'; setTimeout(async()=>{ const r=await fetch('/api/get_screenshot/'+n); const d=await r.json(); document.getElementById('si').src="data:image/jpeg;base64,"+d.image; },3000);}
+        
         setInterval(ref, 3000); ref();
     </script>
 </body>
