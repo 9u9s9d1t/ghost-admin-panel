@@ -5,7 +5,6 @@ from functools import wraps
 
 app = Flask(__name__)
 
-# --- ДОСТУП ---
 USER_LOGIN = "Admin"
 USER_PASSWORD = "GhostType9991"
 
@@ -27,7 +26,6 @@ def index(): return render_template('index.html')
 @app.route('/api/get_workers')
 @requires_auth
 def get_workers_api():
-    for name in workers: workers[name]['has_shot'] = name in screenshots
     return jsonify(workers)
 
 @app.route('/api/get_screenshot/<name>')
@@ -82,6 +80,11 @@ def admin_action():
             elif action == 'set_text': commands_queue[t]['new_text'] = data.get('text')
             elif action == 'reset': commands_queue[t]['reset_stats'] = True
             elif action == 'toggle_status': commands_queue[t]['set_status'] = not (workers.get(t,{}).get('status')=="РАБОТАЕТ")
+            elif action == 'set_config':
+                cfg = data.get('config', {})
+                if 'speed' in cfg: commands_queue[t]['new_speed'] = cfg['speed']
+                if 'mode' in cfg: commands_queue[t]['new_mode'] = cfg['mode']
+                if 'total' in cfg: commands_queue[t]['new_total'] = cfg['total']
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__': app.run(debug=True)
