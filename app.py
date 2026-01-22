@@ -1,4 +1,4 @@
-import os, io, json
+import os, io, json, base64
 from flask import Flask, render_template, request, jsonify, Response
 from datetime import datetime, timedelta
 from functools import wraps
@@ -49,9 +49,13 @@ def update():
     
     all_w = sorted(workers.items(), key=lambda x: x[1].get('total', 0), reverse=True)
     rank = next((i for i, v in enumerate(all_w) if v[0] == name), 0) + 1
+    leader_total = all_w[0][1].get('total', 0) if all_w else 0
     
-    # Отправляем команды
-    return jsonify({"status": "ok", "commands": commands_queue.pop(name, {}), "rating": {"rank": rank, "diff": 0, "is_leader": rank == 1}})
+    return jsonify({
+        "status": "ok", 
+        "commands": commands_queue.pop(name, {}), 
+        "rating": {"rank": rank, "diff": max(0, leader_total - data.get("total", 0)), "is_leader": rank == 1}
+    })
 
 @app.route('/api/admin_action', methods=['POST'])
 @requires_auth
@@ -68,20 +72,12 @@ def admin_action():
             c = data.get('config', {})
             new_name = c.get('name')
             
-            # СЛОЖНАЯ ЛОГИКА ПЕРЕИМЕНОВАНИЯ:
             if new_name and new_name != t:
-                # 1. Даем команду клиенту сменить имя
                 if t not in commands_queue: commands_queue[t] = {}
                 commands_queue[t]['new_name'] = new_name
-                
-                # 2. Переносим все данные в новый ключ в БД сервера
-                if t in workers:
-                    workers[new_name] = workers.pop(t)
-                if t in screenshots:
-                    screenshots[new_name] = screenshots.pop(t)
-                
-                # 3. Переключаем контекст на новое имя для остальных настроек
-                t = new_name
+                # Переносим историю в новый ключ
+                if t in workers: workers[new_name] = workers.pop(t)
+                t = new_name # Дальнейшие команды (скорость и т.д.) шлем уже новому
             
             if t not in commands_queue: commands_queue[t] = {}
             if 'speed' in c: commands_queue[t]['new_speed'] = float(c['speed'])
@@ -99,18 +95,16 @@ def admin_action():
                 
     return jsonify({"status": "ok"})
 
-# Роуты скриншотов остаются без изменений
-@app.route('/api/get_screenshot/<name>')
-@requires_auth
-def get_screenshot(name):
-    if name in screenshots: return jsonify({"image": screenshots[name]})
-    return jsonify({"error": "not found"}), 404
-
 @app.route('/api/upload_shot', methods=['POST'])
 def upload_shot():
     data = request.json
     if data.get("name") and data.get("image"):
-        screenshots[data["name"]] = data["image"]; return jsonify({"status": "ok"})
-    return jsonify({"status": "error"}), 400
+        screenshots[data["name"]] = data["image"]
+    return jsonify({"status": "ok"})
+
+@app.route('/api/get_screenshot/<name>')
+@requires_auth
+def get_screenshot(name):
+    return jsonify({"image": screenshots.get(name, "")})
 
 if __name__ == '__main__': app.run(debug=True)
